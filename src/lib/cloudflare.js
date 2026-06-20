@@ -1,24 +1,29 @@
 import { getRequestContext } from '@cloudflare/next-on-pages';
 
 // 巧妙使用内存作为基础，并在 Node 环境可读写时自动支持本地 JSON 文件持久化
+// 如果全局对象上没有 __d1Store，则初始化一个空的存储结构，包含图片信息 (imginfo) 与 tg图片日志 (tgimglog)
 if (!globalThis.__d1Store) {
   globalThis.__d1Store = { imginfo: [], tgimglog: [] };
 }
 
+// 本地模拟的 D1 数据库类，兼容 Cloudflare D1 驱动的方法签名
 class LocalD1Database {
   constructor() {
     let fsModule = null;
     let pathModule = null;
     try {
+      // 通过 eval('require') 绕过 Webpack/Vite 静态分析，防止在 Edge Runtime 或前端浏览器运行时因加载 node 原生模块而报错进不去
       fsModule = eval("require('fs')");
       pathModule = eval("require('path')");
     } catch (_) {}
 
     this.fs = fsModule;
     this.path = pathModule;
+    // 自动在项目根目录下创建一个本地 JSON 作为数据持久化媒介
     this.filePath = (this.path && typeof process !== 'undefined') ? this.path.join(process.cwd(), '.local_d1.json') : null;
   }
 
+  // 读取本地 JSON 文件中的最新状态并更新到全局内存 __d1Store
   _read() {
     if (this.fs && this.filePath) {
       try {
@@ -38,6 +43,7 @@ class LocalD1Database {
     return globalThis.__d1Store;
   }
 
+  // 将数据同步写入内存和本地物理磁盘，完成类似 commit 的持久化操作
   _write(data) {
     globalThis.__d1Store = data;
     if (this.fs && this.filePath) {
@@ -49,23 +55,27 @@ class LocalD1Database {
     }
   }
 
+  // 预编译 SQL 语句，返回预编译包装类的实例
   prepare(sql) {
     return new LocalD1PreparedStatement(sql, this);
   }
 }
 
+// 模拟 D1 数据库预编译语句执行逻辑，实现基本的 SQL 解析与结果操作
 class LocalD1PreparedStatement {
   constructor(sql, db) {
     this.sql = sql;
     this.db = db;
-    this.bindings = [];
+    this.bindings = []; // 存储 SQL 参数绑定的具体值
   }
 
+  // 绑定参数
   bind(...args) {
     this.bindings = args;
     return this;
   }
 
+  // 执行写操作或对结构有改变的操作（如 INSERT、UPDATE、DELETE）
   async run() {
     const data = this.db._read();
     const result = this._executeRaw(data, true);
@@ -73,12 +83,14 @@ class LocalD1PreparedStatement {
     return result || { success: true };
   }
 
+  // 获取多行查询结果
   async all() {
     const data = this.db._read();
     const results = this._executeRaw(data, false);
     return { results: results || [] };
   }
 
+  // 获取第一行记录，或特定的一列
   async first(colName) {
     const data = this.db._read();
     const results = this._executeRaw(data, false);
@@ -89,18 +101,20 @@ class LocalD1PreparedStatement {
     return results[0];
   }
 
+  // SQL 查询的核心分发匹配引擎，负责解析并对 mock 的内存数据库执行操作
   _executeRaw(dbData, isWrite) {
     const sql = this.sql.trim();
 
     if (!dbData.tgimglog) dbData.tgimglog = [];
     if (!dbData.imginfo) dbData.imginfo = [];
 
-    // 1. INSERT INTO tgimglog 带有绑定 (?, ?, ?, ?)
+    // 1. 插入流量访问日志
     if (sql.startsWith('INSERT INTO tgimglog')) {
       let url, referer, ip, time;
       if (this.bindings.length >= 4) {
         [url, referer, ip, time] = this.bindings;
       } else {
+        // SQL 语法正则回退抓取
         const match = sql.match(/VALUES\s*\(([^)]+)\)/i);
         if (match) {
           const vals = match[1].split(',').map(s => s.trim().replace(/^'|'$/g, ''));
@@ -120,7 +134,7 @@ class LocalD1PreparedStatement {
       return { success: true, results: [newRecord] };
     }
 
-    // 2. INSERT INTO imginfo
+    // 2. 插入图片元数据与审查评级信息
     if (sql.startsWith('INSERT INTO imginfo')) {
       let url = "", referer = "", ip = "", rating = 0, total = 1, time = "";
 
@@ -130,6 +144,7 @@ class LocalD1PreparedStatement {
         const vals = [];
         let cur = '';
         let inQuote = false;
+        // 单引号内部空格与逗号防分裂状态机
         for (let i = 0; i < rawVals.length; i++) {
           const char = rawVals[i];
           if (char === "'") {
@@ -164,7 +179,7 @@ class LocalD1PreparedStatement {
       return { success: true, results: [newRecord] };
     }
 
-    // 3. SELECT COUNT(*) as total FROM imginfo 或 tgimglog 
+    // 3. 统计计数查询
     if (sql.match(/SELECT\s+COUNT\(\*\)\s+as\s+total\s+FROM\s+(\w+)/i)) {
       const match = sql.match(/SELECT\s+COUNT\(\*\)\s+as\s+total\s+FROM\s+(\w+)/i);
       const tableName = match[1].toLowerCase();
@@ -179,7 +194,7 @@ class LocalD1PreparedStatement {
       return [{ total: count }];
     }
 
-    // 4. SELECT rating FROM imginfo WHERE url='...'
+    // 4. 查询单张图片的成人审查等评级值
     if (sql.match(/SELECT\s+rating\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
       const urlMatch = sql.match(/SELECT\s+rating\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i);
       const url = urlMatch[1];
@@ -187,7 +202,7 @@ class LocalD1PreparedStatement {
       return found ? [{ rating: found.rating }] : [];
     }
 
-    // 5. UPDATE imginfo SET rating = ${rating} WHERE url='${name}'
+    // 5. 更新图片的评级等级（黑名单 3，白名单等）
     if (sql.match(/UPDATE\s+imginfo\s+SET\s+rating\s*=\s*(-?\d+)\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
       const updateMatch = sql.match(/UPDATE\s+imginfo\s+SET\s+rating\s*=\s*(-?\d+)\s+WHERE\s+url\s*=\s*'([^']+)'/i);
       const rating = Number(updateMatch[1]);
@@ -202,13 +217,13 @@ class LocalD1PreparedStatement {
       return { success: true, updated };
     }
 
-    // 6. UPDATE imginfo SET total = total +1 WHERE url = ...
+    // 6. 累加访问量累计器
     if (sql.match(/UPDATE\s+imginfo\s+SET\s+total\s*=\s*total\s*\+\s*1\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
       const updateMatch = sql.match(/UPDATE\s+imginfo\s+SET\s+total\s*=\s*total\s*\+\s*1\s+WHERE\s+url\s*=\s*'([^']+)'/i);
       const url = updateMatch[1];
       let updated = false;
 
-      // 让文件名匹配更健壮，支持带或不带 /rf 或前缀的匹配
+      // 提取纯粹的文件后缀名称以使关联匹配更为鲁棒
       const getBaseName = (p) => {
         if (!p) return "";
         const parts = p.split('/');
@@ -225,7 +240,7 @@ class LocalD1PreparedStatement {
       return { success: true, updated };
     }
 
-    // 7. DELETE FROM imginfo WHERE url='...'
+    // 7. 删除单条图片关联信息
     if (sql.match(/DELETE\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
       const deleteMatch = sql.match(/DELETE\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i);
       const url = deleteMatch[1];
@@ -234,7 +249,7 @@ class LocalD1PreparedStatement {
       return { success: true, deleted: initialLen - dbData.imginfo.length };
     }
 
-    // 8. SELECT tgimglog.*, imginfo.rating...
+    // 8. 多表联查 (tgimglog 与 imginfo 的关联查询实现)
     if (sql.includes('tgimglog JOIN imginfo')) {
       let list = [];
       dbData.tgimglog.forEach(log => {
@@ -261,15 +276,15 @@ class LocalD1PreparedStatement {
       let offset = 0;
       const exprMatch = sql.match(/OFFSET\s+(\d+)\s*\*\s*(\d+)/i);
       if (exprMatch) {
-         offset = Number(exprMatch[1]) * Number(exprMatch[2]);
+        offset = Number(exprMatch[1]) * Number(exprMatch[2]);
       } else {
-         const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
-         if (offsetMatch) offset = Number(offsetMatch[1]);
+        const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
+        if (offsetMatch) offset = Number(offsetMatch[1]);
       }
       return list.slice(offset, offset + 10);
     }
 
-    // 9. SELECT * FROM imginfo (带有 LIKE, ORDER BY, LIMIT OFFSET)
+    // 9. 查询 imginfo 主表
     if (sql.startsWith('SELECT * FROM imginfo')) {
       let list = [...dbData.imginfo];
 
@@ -286,10 +301,10 @@ class LocalD1PreparedStatement {
       let offset = 0;
       const exprMatch = sql.match(/OFFSET\s+(\d+)\s*\*\s*(\d+)/i);
       if (exprMatch) {
-         offset = Number(exprMatch[1]) * Number(exprMatch[2]);
+        offset = Number(exprMatch[1]) * Number(exprMatch[2]);
       } else {
-         const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
-         if (offsetMatch) offset = Number(offsetMatch[1]);
+        const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
+        if (offsetMatch) offset = Number(offsetMatch[1]);
       }
       return list.slice(offset, offset + 10);
     }
@@ -298,9 +313,10 @@ class LocalD1PreparedStatement {
   }
 }
 
+// 兼容 Cloudflare R2 对象存储的本地内存及文件模拟器
 class LocalR2Bucket {
   constructor() {
-    // 确保 globalThis 上有内存存储，以便在 Edge Sandbox 下正常跨请求读写
+    // 确保 globalThis 上存在 Map，以便在 Edge Sandbox 下正常保活
     if (!globalThis.__r2Store) {
       globalThis.__r2Store = new Map();
     }
@@ -316,6 +332,7 @@ class LocalR2Bucket {
     this.path = pathModule;
     this.dirPath = (this.path && typeof process !== 'undefined') ? this.path.join(process.cwd(), '.local_r2') : null;
 
+    // 创建本地磁盘 R2 物理文件夹
     if (this.fs && this.dirPath && !this.fs.existsSync(this.dirPath)) {
       try {
         this.fs.mkdirSync(this.dirPath, { recursive: true });
@@ -325,8 +342,8 @@ class LocalR2Bucket {
     }
   }
 
+  // 上传/写入文件
   async put(key, body, options = {}) {
-    // 先将 body 转为安全的 Uint8Array
     let content;
     try {
       if (body && typeof body.arrayBuffer === 'function') {
@@ -368,12 +385,13 @@ class LocalR2Bucket {
       httpMetadata,
     };
 
-    // 总是保存在全局内存存储中 (即使 Edge 模拟器编译时无法使用 fs 也照样能 100% 成功读写)
+    // 保留在内存缓存
     globalThis.__r2Store.set(key, {
       meta: item,
       body: content
     });
 
+    // 持久化到本地磁盘
     if (this.fs && this.dirPath) {
       try {
         const metadataPath = this.path.join(this.dirPath, `${key}.meta.json`);
@@ -389,12 +407,13 @@ class LocalR2Bucket {
     return item;
   }
 
+  // 下载/读取文件
   async get(key, options = {}) {
-    // 优先从全局内存中读取 (Edge 模拟器的核心保障)
+    // 优先加载内存
     if (globalThis.__r2Store && globalThis.__r2Store.has(key)) {
       const stored = globalThis.__r2Store.get(key);
       const meta = stored.meta;
-      const content = stored.body; // Uint8Array
+      const content = stored.body;
 
       return {
         ...meta,
@@ -410,7 +429,7 @@ class LocalR2Bucket {
       };
     }
 
-    // fallback 到磁盘文件读取（保持服务重启后的恢复兼容）
+    // 回退到冷盘机制
     if (this.fs && this.dirPath) {
       try {
         const metadataPath = this.path.join(this.dirPath, `${key}.meta.json`);
@@ -421,7 +440,6 @@ class LocalR2Bucket {
           const fileBuffer = this.fs.readFileSync(contentPath);
           const uint8Array = new Uint8Array(fileBuffer);
 
-          // 保持同步热载入
           if (globalThis.__r2Store) {
             globalThis.__r2Store.set(key, {
               meta,
@@ -449,15 +467,36 @@ class LocalR2Bucket {
 
     return null;
   }
+
+  // 删除指定的冷对象/热对象
+  async delete(key) {
+    if (globalThis.__r2Store) {
+      globalThis.__r2Store.delete(key);
+    }
+    if (this.fs && this.dirPath) {
+      try {
+        const metadataPath = this.path.join(this.dirPath, `${key}.meta.json`);
+        const contentPath = this.path.join(this.dirPath, key);
+        if (this.fs.existsSync(metadataPath)) {
+          this.fs.unlinkSync(metadataPath);
+        }
+        if (this.fs.existsSync(contentPath)) {
+          this.fs.unlinkSync(contentPath);
+        }
+      } catch (error) {
+        console.error("Local R2 Delete Error:", error);
+      }
+    }
+  }
 }
 
+// 获取安全的环境上下文变量 binding 拦截挂载代理
 export function getSafeRequestContext() {
   try {
     const context = getRequestContext();
     if (context && context.env) {
       const activeEnv = { ...context.env };
       if (!activeEnv.IMG) {
-        // Fallback inside Pages context if binding is dynamically missing in staging
         try {
           activeEnv.IMG = new LocalD1Database();
         } catch (_) {}
@@ -481,10 +520,10 @@ export function getSafeRequestContext() {
       };
     }
   } catch (e) {
-    // Gracefully catch standard environment mismatch errors
+    // 优雅捕捉潜在的边界异常
   }
 
-  // Generate safe fallback D1 Database in development environments
+  // 本地沙盒环境兼容降级与代理挂载
   const mockD1 = new LocalD1Database();
   const mockR2 = new LocalR2Bucket();
   const envHandler = {

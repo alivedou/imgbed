@@ -7,9 +7,10 @@ import { ToastContainer, toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrashAlt } from '@fortawesome/free-solid-svg-icons';
 import { PhotoProvider, PhotoView } from 'react-photo-view';
+import LoginModal from './LoginModal';
 
 // ==========================================
-// 1. Footer Component
+// 1. Footer Component (页脚组件)
 // ==========================================
 export function Footer() {
   return (
@@ -32,11 +33,12 @@ export function Footer() {
 }
 
 // ==========================================
-// 2. FullScreenIcon Component
+// 2. FullScreenIcon Component (全屏/退出全屏图标组件)
 // ==========================================
 export function FullScreenIcon(props) {
   const [fullscreen, setFullscreen] = useState(false);
 
+  // 监听全屏 API 状态变化，从而动态调整返回的矢量图标路径
   useEffect(() => {
     const handleFullscreenChange = () => {
       setFullscreen(Boolean(document.fullscreenElement));
@@ -70,7 +72,7 @@ export function FullScreenIcon(props) {
 }
 
 // ==========================================
-// 3. ImageModal Component (Helper Data & Extensions)
+// 3. ImageModal Component (图片/视频预览灯箱弹窗组件)
 // ==========================================
 const imageExtensions = [
   'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp',
@@ -82,11 +84,13 @@ const videoExtensions = [
   'ogv', 'm4v', '3gp', '3g2', 'mpg', 'mpeg', 'mxf', 'vob'
 ];
 
+// 获取文件名后缀的通用逻辑
 const getFileExtension = (url) => {
   const parts = url.split('.');
   return parts.length > 1 ? parts.pop().toLowerCase() : '';
 };
 
+// 重构代理之后的图片物理获取路径
 const getImgUrl = (url) => {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return url.startsWith("/file/") || url.startsWith("/cfile/") ? `${origin}/api${url}` : url;
@@ -168,6 +172,7 @@ export function ImageModal({ selectedImageIndex, setSelectedImageIndex, data }) 
           {renderFile()}
         </div>
 
+        {/* 悬浮多功能操控栏 */}
         <div className="flex items-center gap-4 p-2 bg-black/50 backdrop-blur-lg rounded-full border border-white/20 pointer-events-auto shadow-xl">
           <button
             className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white transition-colors"
@@ -217,7 +222,7 @@ export function ImageModal({ selectedImageIndex, setSelectedImageIndex, data }) 
 }
 
 // ==========================================
-// 4. LoadingOverlay Component
+// 4. LoadingOverlay Component (全屏模糊状态加载等候组件)
 // ==========================================
 export function LoadingOverlay({ loading }) {
   if (!loading) return null;
@@ -233,81 +238,19 @@ export function LoadingOverlay({ loading }) {
 }
 
 // ==========================================
-// 5. SignIn Component (LoginPage)
+// 5. SignIn Component (LoginPage - 默认全屏登录过渡页组件)
 // ==========================================
 export function LoginPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const result = await signIn('credentials', {
-        redirect: false,
-        username,
-        password,
-      });
-      if (result?.error) {
-        console.log(result.error);
-        toast.error("Incorrect username or password. Please check and try again.");
-      } else {
-        console.log('Login successful!');
-        toast.success('Login successful! Redirecting...');
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      }
-    } catch (error) {
-      console.log('Error during sign in:', error);
-    }
-  };
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 py-12 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-sm bg-white p-8 rounded-xl border border-zinc-200 shadow-sm">
-        <h1 className="text-center text-xl font-bold tracking-tight text-zinc-900">
-          Sign In
-        </h1>
-        <div className="mt-8">
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1" htmlFor="username">Username</label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="block w-full rounded-md border border-zinc-200 px-3 py-2 text-zinc-900 text-sm placeholder:text-zinc-400 focus:border-black focus:ring-0 transition-colors"
-                placeholder="Admin"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1" htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-md border border-zinc-200 px-3 py-2 text-zinc-900 text-sm placeholder:text-zinc-400 focus:border-black focus:ring-0 transition-colors"
-                placeholder="••••••••"
-              />
-            </div>
-            <button
-              type="submit"
-              className="flex w-full justify-center rounded-md bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors shadow-sm mt-6"
-            >
-              Log in
-            </button>
-          </form>
-        </div>
-      </div>
-      <ToastContainer/>
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
+      <LoginModal isOpen={true} isPage={true} />
+      <ToastContainer />
     </div>
   );
 }
 
 // ==========================================
-// 6. SignOutButton Component
+// 6. SignOutButton Component (安全登出按钮组件)
 // ==========================================
 export function SignOutButton() {
   return (
@@ -318,7 +261,7 @@ export function SignOutButton() {
 }
 
 // ==========================================
-// 7. SwitchButton Component (Switcher)
+// 7. SwitchButton Component (Switcher - 图片违规拦截快捷黑名单开关组件)
 // ==========================================
 const updateRating = async (initName, rating) => {
   try {
@@ -382,7 +325,7 @@ export function Switcher({ initialChecked, initName }) {
 }
 
 // ==========================================
-// 8. Tooltip Component (TooltipItem)
+// 8. Tooltip Component (TooltipItem - 气泡文字提示辅助工具组件)
 // ==========================================
 export function TooltipItem({ children, tooltipsText, position }) {
   return (
@@ -404,6 +347,7 @@ export function TooltipItem({ children, tooltipsText, position }) {
                 `absolute bg-zinc-900 text-white left-1/2 top-full z-20 mt-3 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity`)
             }`}
           >
+            {/* 指向性微型倒三角 */}
             <span
               className={` ${
                 (position === "right" &&
@@ -425,18 +369,20 @@ export function TooltipItem({ children, tooltipsText, position }) {
 }
 
 // ==========================================
-// 9. Table Component
+// ==========================================
+// 9. Table Component (后台管理数据主列表项渲染组件)
 // ==========================================
 export function Table({ data: initialData = [] }) {
   const [data, setData] = useState(initialData);
-  const [modalData, setModalData] = useState(null);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [modalData, setModalData] = useState(null); // 分享面板绑定的活动数据
+  const [itemToDelete, setItemToDelete] = useState(null); // 即将执行彻底物理删除的项目标识
   const modalRef = useRef(null);
 
   useEffect(() => {
     setData(initialData);
   }, [initialData]);
 
+  // 点击遮罩层关闭模态弹窗
   const handleClickOutside = (e) => {
     if (modalRef.current && !modalRef.current.contains(e.target)) {
       setModalData(null);
@@ -445,6 +391,7 @@ export function Table({ data: initialData = [] }) {
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
+  // 获取真实物理或代理存储链接
   const getImgUrl = (url) => {
     return url.startsWith("/file/") || url.startsWith("/cfile/") || url.startsWith("/rfile/") ? `${origin}/api${url}` : url;
   };
@@ -463,6 +410,7 @@ export function Table({ data: initialData = [] }) {
     });
   };
 
+  // 通过后台 API 请求永久删除选中图片物理介质及对应 D1 数据库记录
   const deleteItem = async (initName) => {
     try {
       const res = await fetch(`/api/admin/delete`, {
@@ -501,11 +449,13 @@ export function Table({ data: initialData = [] }) {
     setItemToDelete(null);
   };
 
+  // 辅助解析：截取链接段中最后一串文字
   function getLastSegment(url) {
     const lastSlashIndex = url.lastIndexOf('/');
     return url.substring(lastSlashIndex + 1);
   }
 
+  // 动态渲染列表中的媒体内容主体类型预览（自动区分音频/视频/普通图片格式渲染）
   const renderFile = (fileUrl, index) => {
     const _url = getLastSegment(fileUrl);
     const getFileExtensionLocal = (url) => {
@@ -556,6 +506,7 @@ export function Table({ data: initialData = [] }) {
     }
   };
 
+  // 全屏预览灯箱切换
   function toggleFullScreen() {
     if (document.fullscreenElement) {
       document.exitFullscreen();
@@ -657,7 +608,7 @@ export function Table({ data: initialData = [] }) {
                     ) : (
                       <PhotoView key={item.url} src={getImgUrl(item.url)}>
                         <div className="cursor-pointer h-full w-full">
-                          {renderFile(getImgUrl(item.url), index)}
+                           {renderFile(getImgUrl(item.url), index)}
                         </div>
                       </PhotoView>
                     )}
@@ -697,6 +648,7 @@ export function Table({ data: initialData = [] }) {
       </table>
       </div>
 
+      {/* 分享格式弹发面板（支持 HTML、Markdown、Raw URL 与 BB-Code 复制） */}
       {modalData && (
         <div onClick={handleClickOutside} className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
@@ -729,6 +681,7 @@ export function Table({ data: initialData = [] }) {
         </div>
       )}
 
+      {/* 确认彻底物理级移除二次判定提示框 */}
       {itemToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>

@@ -2,14 +2,15 @@ export const runtime = 'edge';
 import { getSafeRequestContext } from '@/lib/cloudflare';
 import { auth } from '@/auth';
 
+// 统一的跨域 (CORS) 响应控制头
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400', // 24 hours
+  'Access-Control-Max-Age': '86400', // 24小时浏览器缓存期限
   'Content-Type': 'application/json'
 };
 
-// --- Mime Types helper ---
+// 根据文件名后缀，获取合适的 HTTP Content-Type 内容类型，用于静态/防盗链代理输出
 function getContentType(fileName) {
   const extension = fileName.split('.').pop().toLowerCase();
   const mimeTypes = {
@@ -34,7 +35,7 @@ function getContentType(fileName) {
   return mimeTypes[extension] || 'application/octet-stream';
 }
 
-// --- Common Database / Time helpers ---
+// 获取符合上海时间 (UTF+8) 格式化的当前系统时间字符串
 async function get_nowTime() {
   const options = {
     timeZone: 'Asia/Shanghai',
@@ -49,6 +50,7 @@ async function get_nowTime() {
   return new Intl.DateTimeFormat('zh-CN', options).format(new Date());
 }
 
+// 在本地数据库 imginfo 表中插入全新的图片记录（例如初始访问频次为1，保存上传者IP等）
 async function insertImageData(env, src, referer, ip, rating, time) {
   try {
     await env.prepare(
@@ -60,6 +62,7 @@ async function insertImageData(env, src, referer, ip, rating, time) {
   }
 }
 
+// 插入图片被外界请求访问的原始访问日志日志记录到 tgimglog
 async function insertTgImgLog(DB, url, referer, ip, time) {
   try {
     await DB.prepare('INSERT INTO tgimglog (url, referer, ip, time) VALUES (?, ?, ?, ?)')
@@ -70,6 +73,7 @@ async function insertTgImgLog(DB, url, referer, ip, time) {
   }
 }
 
+// 从数据库中单条提取已经存在的图片等级判定结果
 async function getRatingFromDB(DB, url) {
   try {
     const ps = DB.prepare(`SELECT rating FROM imginfo WHERE url='${url}'`);
@@ -80,7 +84,7 @@ async function getRatingFromDB(DB, url) {
   }
 }
 
-// --- ModerateContent Rating ---
+// 调用 ModerateContent 图像智能鉴黄审查 API，自动标记成人/敏感图片（3 代表阻断拦截）
 async function getModerateContentRating(env, url, type = 'telegra') {
   try {
     const apikey = env.ModerateContentApiKey;
@@ -108,7 +112,7 @@ async function getModerateContentRating(env, url, type = 'telegra') {
   }
 }
 
-// --- Telegram Specific helpers ---
+// 根据 Telegram 文件 ID，动态调用 Telegram API 换取该文件在 TG 服务端的物理相对路径
 async function getFile_path(env, file_id) {
   try {
     const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/getFile?file_id=${file_id}`;
@@ -128,6 +132,7 @@ async function getFile_path(env, file_id) {
   }
 }
 
+// 解析并提取 Telegram Webhook 或者媒体上传回调中包含的最优分辨率文件项 details
 const getFileDetail = async (response) => {
   try {
     if (!response.ok) return null;
@@ -153,6 +158,7 @@ const getFileDetail = async (response) => {
   }
 };
 
+// 辅助进行访问频次记录的记录更新管道
 async function logRequest(env, path, name, referer, ip) {
   try {
     const nowTime = await get_nowTime();
@@ -163,12 +169,13 @@ async function logRequest(env, path, name, referer, ip) {
   }
 }
 
-// --- Unified Handler ---
+// --- 统一的 GET 请求处理器 ---
 export async function GET(request, { params }) {
   const { slug } = params || {};
   const path = slug ? slug.join('/') : '';
   const { env, cf, ctx } = getSafeRequestContext();
 
+  // 从 HTTP 请求中嗅探获取最真实的客户端源 IP 
   const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || request.socket?.remoteAddress;
   const clientIp = ip ? ip.split(',')[0].trim() : 'IP not found';
   const Referer = request.headers.get('Referer') || "Referer";
@@ -179,12 +186,12 @@ export async function GET(request, { params }) {
   const actualOrigin = host ? `${forwardedProto}://${host}` : req_url.origin;
   const customDomain = env.CUSTOM_DOMAIN ? env.CUSTOM_DOMAIN.replace(/\/$/, '') : actualOrigin;
 
-  // 1. GET /api/ip
+  // 1. GET /api/ip ：测试接口，返回当前客端真实 IP 地址
   if (path === 'ip') {
     return Response.json({ ip: clientIp }, { headers: corsHeaders });
   }
 
-  // 2. GET /api/total
+  // 2. GET /api/total ：获取当前数据库储存的图片总量
   if (path === 'total') {
     try {
       if (env.IMG) {
@@ -212,12 +219,12 @@ export async function GET(request, { params }) {
     }
   }
 
-  // 3. GET /api/admin/ip
+  // 3. GET /api/admin/ip ：管理员专用的客户端 ip 测试路径
   if (path === 'admin/ip') {
     return Response.json({ ip: clientIp }, { headers: corsHeaders });
   }
 
-  // 4. GET /api/enableauthapi/isauth
+  // 4. GET /api/enableauthapi/isauth ：检查当前访问用户在 session 下的权限状态与强制登陆限制是否开启
   if (path === 'enableauthapi/isauth') {
     const enableAuthapi = env.ENABLE_AUTH_API === 'true' || process.env.ENABLE_AUTH_API === 'true';
     const session = await auth();
@@ -231,17 +238,18 @@ export async function GET(request, { params }) {
     }, { headers: corsHeaders });
   }
 
-  // 5. GET /api/enableauthapi/ip
+  // 5. GET /api/enableauthapi/ip ：带有启用授权路径的客户端访问 IP 测试通道
   if (path === 'enableauthapi/ip') {
     return Response.json({ ip: clientIp }, { headers: corsHeaders });
   }
 
-  // 6. GET /api/file/[name] (Proxied Telegraph images)
+  // 6. GET /api/file/[name] ：通过反向代理将 Telegraph 的静态资源图片安全送出，并在数据库端记录统计和自动鉴黄拦截操作
   if (slug && slug[0] === 'file' && slug[1]) {
     const name = slug[1];
     try {
       const res = await fetch(`https://telegra.ph/file/${name}`);
 
+      // 免去在控制后台以及编辑首页时由于频繁预览而导致的拦截和统计
       if (Referer === `${customDomain}/admin` || Referer === `${customDomain}/list` || Referer === `${customDomain}/`) {
         return res;
       } else if (!env.IMG) {
@@ -262,6 +270,7 @@ export async function GET(request, { params }) {
             return res;
           }
         } else {
+          // 如果数据库内无此图片记录，触发新图片的首次鉴黄存储机制
           if (env.PROXYALLIMG) {
             try {
               const rating_index = await getModerateContentRating(env, `/file/${name}`, 'telegra');
@@ -289,7 +298,7 @@ export async function GET(request, { params }) {
     }
   }
 
-  // 7. GET /api/rfile/[name] (Cloudflare R2 images)
+  // 7. GET /api/rfile/[name] ：Cloudflare R2 本地/桶存储的最终下载分发及代理判定管道
   if (slug && slug[0] === 'rfile' && slug[1]) {
     const name = slug[1];
     if (!env.IMGRS) {
@@ -377,7 +386,7 @@ export async function GET(request, { params }) {
     }
   }
 
-  // 8. GET /api/cfile/[name] (Telegram Bot Uploads)
+  // 8. GET /api/cfile/[name] ：通过 Telegram 机器人存储通道分发生存图片
   if (slug && slug[0] === 'cfile' && slug[1]) {
     const name = slug[1];
     if (!env.TG_BOT_TOKEN) {
@@ -482,10 +491,11 @@ export async function POST(request, { params }) {
   const actualOrigin = host ? `${forwardedProto}://${host}` : req_url.origin;
   const customDomain = env.CUSTOM_DOMAIN ? env.CUSTOM_DOMAIN.replace(/\/$/, '') : actualOrigin;
 
-  // 1. POST /api/tg
+  // 1. POST /api/tg ：Telegraph 官方图床上传服务代理
   if (path === 'tg') {
     const enableAuthapi = env.ENABLE_AUTH_API === 'true' || process.env.ENABLE_AUTH_API === 'true';
     if (enableAuthapi) {
+      // 检查当前访问用户在 session 下的权限状态是否符合普通登录角色
       const session = await auth();
       if (!session) {
         return Response.json({
@@ -510,6 +520,7 @@ export async function POST(request, { params }) {
       const telegraFormData = new FormData();
       telegraFormData.append('file', file, file.name || 'file');
 
+      // 将文件表单转发上传至 Telegraph 官方临时上传接口
       const res = await fetch(`https://telegra.ph/upload?source=bugtracker`, {
         method: 'POST',
         body: telegraFormData,
@@ -534,6 +545,7 @@ export async function POST(request, { params }) {
         try {
           const rating_index = await getModerateContentRating(env, resdata.src, 'telegra');
           nowTime = await get_nowTime();
+          // 在本地数据库中安全地记录图片元数据与鉴黄状态
           await insertImageData(env.IMG, resdata.src, Referer, clientIp, rating_index, nowTime);
           return Response.json({
             ...data,
@@ -564,7 +576,7 @@ export async function POST(request, { params }) {
     }
   }
 
-  // 2. POST /api/vviptuangou
+  // 2. POST /api/vviptuangou ：第三方免费图床备用服务代理上传
   if (path === 'vviptuangou') {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -638,10 +650,11 @@ export async function POST(request, { params }) {
     }
   }
 
-  // 3. POST /api/admin/[action] (admin controllers)
+  // 3. POST /api/admin/[action] ：管理员专用的后台基础查询数据控制分配器
   if (slug && slug[0] === 'admin') {
     const action = slug[1];
     try {
+      // 获取当前数据库所有的图片主数据及关联属性列表
       if (action === 'list') {
         let { page, query } = await request.json();
         if (query) {
@@ -671,6 +684,7 @@ export async function POST(request, { params }) {
         }
       }
 
+      // 获取访客浏览日志及关联分级的日志行为
       if (action === 'log') {
         let { page, query } = await request.json();
         if (query) {
@@ -708,7 +722,7 @@ export async function POST(request, { params }) {
     }
   }
 
-  // 4. POST /api/enableauthapi/tgchannel
+  // 4. POST /api/enableauthapi/tgchannel ：通过 Telegram Bot Token 渠道上传多媒体到指定专属频道
   if (path === 'enableauthapi/tgchannel') {
     if (!env.TG_BOT_TOKEN || !env.TG_CHAT_ID) {
       return Response.json({
@@ -722,6 +736,7 @@ export async function POST(request, { params }) {
       const formData = await request.formData();
       const fileType = formData.get('file').type;
 
+      // 自动判定所上传媒体文件的 MIME 级别，从而自动对应调取 Telegram 的指定 endpoint 方法进行承接
       const fileTypeMap = {
         'image/': { url: 'sendPhoto', type: 'photo' },
         'video/': { url: 'sendVideo', type: 'video' },
@@ -740,6 +755,7 @@ export async function POST(request, { params }) {
       const file = formData.get('file');
       newformData.append(fileTypevalue, file, file.name || "file");
 
+      // 正式执行上传到 Telegram 物理接口
       const res_img = await fetch(up_url, {
         method: "POST",
         headers: {
@@ -812,7 +828,7 @@ export async function POST(request, { params }) {
     }
   }
 
-  // 5. POST /api/enableauthapi/r2
+  // 5. POST /api/enableauthapi/r2 ：将文件上传存入自定义底层 R2 桶存储内
   if (path === 'enableauthapi/r2') {
     if (!env.IMGRS) {
       return Response.json({
@@ -832,6 +848,7 @@ export async function POST(request, { params }) {
       header.set("content-type", fileType);
       header.set("content-length", `${file.size}`);
 
+      // 调用 mock R2 桶的 put 方法持久化资源
       const object = await env.IMGRS.put(filename, file, {
         httpMetadata: header
       });
@@ -892,12 +909,13 @@ export async function POST(request, { params }) {
   return Response.json({ name: "Not Found", path, success: false }, { status: 404, headers: corsHeaders });
 }
 
+// --- 统一的 PUT 请求处理器 ---
 export async function PUT(request, { params }) {
   const { slug } = params || {};
   const path = slug ? slug.join('/') : '';
   const { env } = getSafeRequestContext();
 
-  // PUT /api/admin/block
+  // PUT /api/admin/block ：管理员快捷对单张图片设定拉黑/评级修改
   if (path === 'admin/block') {
     try {
       let { rating, name } = await request.json();
@@ -919,17 +937,18 @@ export async function PUT(request, { params }) {
   return Response.json({ name: "Not Found", path, success: false }, { status: 404, headers: corsHeaders });
 }
 
+// --- 统一的 DELETE 请求处理器 ---
 export async function DELETE(request, { params }) {
   const { slug } = params || {};
   const path = slug ? slug.join('/') : '';
   const { env } = getSafeRequestContext();
 
-  // DELETE /api/admin/delete
+  // DELETE /api/admin/delete ：从后台面板中永久且多通道删除物理介质图片和 D1 主记录
   if (path === 'admin/delete') {
     try {
       let { name } = await request.json();
 
-      // --- Telegram File Deletion ---
+      // --- 远程 Telegram 指定消息撤回删除 ---
       if (name.startsWith('/cfile/')) {
         try {
           const urlObj = new URL(name, 'http://localhost');
@@ -949,7 +968,7 @@ export async function DELETE(request, { params }) {
         }
       }
 
-      // --- R2 File Deletion ---
+      // --- 物理云/本地 R2 冷介质删除 ---
       if (name.startsWith('/rfile/')) {
         try {
           const fileName = name.split('/').pop();
@@ -961,6 +980,7 @@ export async function DELETE(request, { params }) {
         }
       }
 
+      // 从数据库关联记录中永久清除该数据
       const setData = await env.IMG.prepare(`DELETE FROM imginfo WHERE url='${name}'`).run();
       return Response.json({
         "code": 200,
@@ -979,6 +999,7 @@ export async function DELETE(request, { params }) {
   return Response.json({ name: "Not Found", path, success: false }, { status: 404, headers: corsHeaders });
 }
 
+// --- OPTIONS 跨域测试飞行请求应对处理器 ---
 export async function OPTIONS() {
   return new Response(null, {
     headers: {

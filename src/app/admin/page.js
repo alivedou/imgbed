@@ -4,20 +4,18 @@ import { Table } from "@/components"
 import { useState, useEffect, useCallback } from 'react';
 import { ToastContainer, toast } from "react-toastify";
 import Link from 'next/link'
-// import { toast } from "react-toastify";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faHome, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
 
-
-
-
+// 管理员专用控制面板页面
 export default function Admin() {
-  const [listData, setListData] = useState([])
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchTotal, setSearchTotal] = useState(0); // 初始化为0，因为初始时还没有搜索结果
-  const [inputPage, setInputPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [listData, setListData] = useState([]) // 当前分页加载对应的图表数据条目
+  const [currentPage, setCurrentPage] = useState(1); // 页面当前的活动页签索引
+  const [searchTotal, setSearchTotal] = useState(0); // 统计搜索或过滤结果匹配出的总可分页数
+  const [inputPage, setInputPage] = useState(1); // 输入跳转的页码绑定
+  const [searchQuery, setSearchQuery] = useState(''); // 搜索框绑定的字符串查询对象
 
-
-
+  // 回调拉取主分页列表数据
   const getListdata = useCallback(async (page) => {
     try {
       const res = await fetch(`/api/admin/log`, {
@@ -46,12 +44,12 @@ export default function Admin() {
 
   }, [searchQuery]);
 
-
+  // 页数变动时自动重新拉取图表
   useEffect(() => {
     getListdata(currentPage)
   }, [currentPage]);
 
-  // 分页控制按钮
+  // 分页控制按钮：向后翻页
   const handleNextPage = () => {
     const nextPage = currentPage + 1;
     if (nextPage > searchTotal) { // 检查下一页是否在总页数范围内
@@ -64,17 +62,17 @@ export default function Admin() {
 
   };
 
+  // 分页控制按钮：向前翻页
   const handlePrevPage = () => {
     const prevPage = currentPage - 1;
     if (prevPage >= 1) { // 检查上一页是否在总页数范围内
       setCurrentPage(prevPage);
       setInputPage(prevPage)
-      // searchVideo(prevPage);
     }
 
   };
 
-
+  // 跨页快速跳转处理器
   const handleJumpPage = () => {
     const page = parseInt(inputPage, 10);
     if (!isNaN(page) && page >= 1 && page <= searchTotal) {
@@ -82,9 +80,9 @@ export default function Admin() {
     } else {
       toast.error('Please enter a valid page number!');
     }
-    // setInputPage(""); // 清空输入框
   };
 
+  // 处理搜索过滤行为
   const handleSearch = (event) => {
     event.preventDefault();
     setCurrentPage(1);
@@ -95,6 +93,7 @@ export default function Admin() {
   return (
     <>
       <div className="overflow-auto h-full flex w-full min-h-screen flex-col items-center justify-between">
+        {/* 固定顶置导航结构 */}
         <header className="fixed top-0 h-[50px] left-0 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md flex z-50 justify-center items-center">
           <div className="flex justify-between items-center w-full max-w-5xl px-6">
             <h1 className="text-sm font-bold tracking-tight text-zinc-900">ADMIN DASHBOARD</h1>
@@ -111,25 +110,34 @@ export default function Admin() {
                 </div>
               </form>
               <Link href="/">
-                <button className="text-[10px] font-bold text-zinc-500 hover:text-black uppercase tracking-wider transition-colors">
-                  Home
+                <button
+                  id="admin-home-btn"
+                  title="Home"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:text-black hover:bg-zinc-50 transition-all duration-150 shadow-sm"
+                >
+                  <FontAwesomeIcon icon={faHome} className="w-4 h-4" />
                 </button>
               </Link>
               <button 
                 onClick={() => signOut({ callbackUrl: "/" })} 
-                className="text-[10px] font-bold text-zinc-500 hover:text-red-500 uppercase tracking-wider transition-colors"
+                id="admin-logout-btn"
+                title="Logout"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:text-red-500 hover:bg-zinc-50 transition-all duration-150 shadow-sm"
               >
-                Logout
+                <FontAwesomeIcon icon={faSignOutAlt} className="w-4 h-4" />
               </button>
             </div>
           </div>
         </header>
 
+        {/* 主数据列表及组件展示区域 */}
         <main className="my-[60px] w-9/10  sm:w-9/10 md:w-9/10 lg:w-9/10 xl:w-3/5 2xl:w-full">
 
           <Table data={listData} />
 
         </main>
+
+        {/* 底层控制面板及分页悬浮处理栏 */}
         <div className="fixed inset-x-0 bottom-0 h-[50px] w-full flex z-50 justify-center items-center bg-white border-t border-zinc-200">
           <div className="flex justify-center items-center gap-4">
             <button 

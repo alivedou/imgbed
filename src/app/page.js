@@ -2,15 +2,16 @@
 import { useState, useRef, useCallback } from "react";
 import { signOut } from "next-auth/react"
 import Image from "next/image";
-import { faImages, faTrashAlt, faUpload, faSearchPlus } from '@fortawesome/free-solid-svg-icons';
+import { faImages, faTrashAlt, faUpload, faSearchPlus, faCog, faSignInAlt, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { ToastContainer } from "react-toastify";
 import { toast } from "react-toastify";
 import { useEffect } from 'react';
 import { Footer, LoadingOverlay } from '@/components';
 import Link from "next/link";
+import LoginModal from '@/components/LoginModal';
 
-
+// 登录快捷按钮辅助函数式组件
 const LoginButton = ({ onClick, href, children }) => (
   <button
     onClick={onClick}
@@ -20,115 +21,97 @@ const LoginButton = ({ onClick, href, children }) => (
   </button>
 );
 
-
+// 主应用门户级首页面板 React 组件
 export default function Home() {
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [uploadedImages, setUploadedImages] = useState([]);
-  const [uploadedFilesNum, setUploadedFilesNum] = useState(0);
-  const [selectedImage, setSelectedImage] = useState(null); // 添加状态用于跟踪选中的放大图片
-  const [activeTab, setActiveTab] = useState('preview');
-  const [uploading, setUploading] = useState(false);
-  const [IP, setIP] = useState('');
-  const [Total, setTotal] = useState('?');
-  const [selectedOption, setSelectedOption] = useState('r2'); // 初始选择第一个选项
-  const [isAuthapi, setisAuthapi] = useState(false); // 初始选择第一个选项
-  const [Loginuser, setLoginuser] = useState(''); // 初始选择第一个选项
-  const [boxType, setBoxtype] = useState("img");
+  const [selectedFiles, setSelectedFiles] = useState([]); // 用户已选待上传暂存文件数组
+  const [uploadedImages, setUploadedImages] = useState([]); // 服务器已成功回调并持久化的上传结果列表
+  const [uploadedFilesNum, setUploadedFilesNum] = useState(0); // 本次上传成功的总数
+  const [selectedImage, setSelectedImage] = useState(null); // 上传后点击预览大图
+  const [activeTab, setActiveTab] = useState('preview'); // 分享格式选择页签
+  const [uploading, setUploading] = useState(false); // 进行物理上传时的全局加锁背景遮罩状态
+  const [IP, setIP] = useState(''); // 用户端来源 IP 地址
+  const [Total, setTotal] = useState('?'); // 全网已承载文件累计总数
+  const [selectedOption, setSelectedOption] = useState('r2'); // 选择将文件上传到的具体网关或渠道D桶
+  const [isAuthapi, setisAuthapi] = useState(false); // 会话是否已获得登录管理层鉴权
+  const [Loginuser, setLoginuser] = useState(''); // 获取当期管理员或用户具体会话身份标识
+  const [boxType, setBoxtype] = useState("img"); // 预览浮层内容的类型
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false); // 悬浮登录快捷框开启/关闭状态
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-
-
   const parentRef = useRef(null);
 
-
-
-
-
-
   let headers = {
-
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-
   }
+
+  // 初始化拉取各接口环境与服务器态势
   useEffect(() => {
     ip();
     getTotal();
     isAuth();
-
-
   }, []);
+
+  // 1. IP 拉取：异步检测用户的当前局网/公网出口 IP 并更新回显
   const ip = async () => {
     try {
-
       const res = await fetch(`/api/ip`, {
         method: "GET",
         headers: {
           'Content-Type': 'application/json'
         }
-
       });
       const data = await res.json();
       setIP(data.ip);
-
-
-
     } catch (error) {
       console.error('Request error (ip):', error);
     }
   };
+
+  // 2. 鉴权检测：侦测当前 Session 的 NextAuth 登录关联情况与管理员权限
   const isAuth = async () => {
     try {
-
       const res = await fetch(`/api/enableauthapi/isauth`, {
         method: "GET",
         headers: {
           'Content-Type': 'application/json'
         }
-
       });
 
       if (res.ok) {
         const data = await res.json();
         setisAuthapi(true)
         setLoginuser(data.role)
-
       } else {
         setisAuthapi(false)
         setSelectedOption("r2")
       }
-
-
-
     } catch (error) {
       console.error('Request error (isAuth):', error);
     }
   };
 
+  // 3. 统计计数：通过安全数据拉取总数
   const getTotal = async () => {
     try {
-
       const res = await fetch(`/api/total`, {
         method: "GET",
         headers: {
           'Content-Type': 'application/json'
         }
-
       });
       const data = await res.json();
       setTotal(data.total);
-
-
-
     } catch (error) {
       console.error('Request error:', error);
     }
   }
 
+  // 4. 输入变更：支持用户手动在对话弹窗与拖拽区中批量塞入文件资源
   const handleFileChange = (event) => {
     const newFiles = event.target.files;
     const filteredFiles = Array.from(newFiles).filter(file =>
       !selectedFiles.find(selFile => selFile.name === file.name));
-    // 过滤掉已经在 uploadedImages 数组中存在的文件
+    // 过滤掉已经在已成功上传的 uploadedImages 文件集里的文件
     const uniqueFiles = filteredFiles.filter(file =>
       !uploadedImages.find(upImg => upImg.name === file.name)
     );
@@ -136,6 +119,7 @@ export default function Home() {
     setSelectedFiles([...selectedFiles, ...uniqueFiles]);
   };
 
+  // 5. 状态清除：擦除本地选空待上和已上传结果记录
   const handleClear = () => {
     setSelectedFiles([]);
     setUploadedImages([]);
@@ -146,13 +130,13 @@ export default function Home() {
     }
   };
 
+  // 6. 大小计算器：统计当期所选批量资源的总体积
   const getTotalSizeInMB = (files) => {
     const totalSizeInBytes = Array.from(files).reduce((acc, file) => acc + file.size, 0);
     return (totalSizeInBytes / (1024 * 1024)).toFixed(2); // 转换为MB并保留两位小数
   };
 
-
-
+  // 7. 多介质文件分段上传具体通道逻辑
   const handleUpload = async (file = null) => {
     setUploading(true);
 
@@ -170,15 +154,14 @@ export default function Home() {
     try {
       for (const file of filesToUpload) {
         const formData = new FormData();
-
         formData.append(formFieldName, file);
 
         try {
+          // 根据通道前缀的不同，分发匹配不同的 API 端点接口路由
           const targetUrl = selectedOption === "tgchannel" || selectedOption === "r2"
             ? `/api/enableauthapi/${selectedOption}`
             : `/api/${selectedOption}`;
 
-          // const response = await fetch("https://img.131213.xyz/api/tencent", {
           const response = await fetch(targetUrl, {
             method: 'POST',
             body: formData,
@@ -187,7 +170,6 @@ export default function Home() {
 
           if (response.ok) {
             const result = await response.json();
-            // console.log(result);
 
             const imageRecord = {
               url: result.url,
@@ -195,22 +177,21 @@ export default function Home() {
               type: file.type
             };
 
-            // 更新 uploadedImages 和 selectedFiles
+            // 上传成功后将成品计入已成功资源池并出栈带暂存队列
             setUploadedImages((prevImages) => [...prevImages, imageRecord]);
             setSelectedFiles((prevFiles) => prevFiles.filter(f => f !== file));
             successCount++;
           } else {
-            // 尝试从响应中提取错误信息
+            // 发生异常，提炼服务端具体原因
             let errorMsg;
             try {
               const errorData = await response.json();
               errorMsg = errorData.message || `Error uploading image ${file.name}`;
             } catch (jsonError) {
-              // 如果解析 JSON 失败，使用默认错误信息
               errorMsg = `Unknown error uploading image ${file.name}`;
             }
 
-            // 细化状态码处理
+            // 细化和分类不同状态代码做精准的用户通知
             switch (response.status) {
               case 400:
                 toast.error(`Invalid request: ${errorMsg}`);
@@ -247,10 +228,7 @@ export default function Home() {
     }
   };
 
-
-
-
-
+  // 8. 剪贴板粘贴上传侦听器：支持在拖拽容器范围内粘贴实体文件或者系统截图
   const handlePaste = (event) => {
     const clipboardItems = event.clipboardData.items;
 
@@ -259,11 +237,12 @@ export default function Home() {
       if (item.kind === 'file' && item.type.includes('image')) {
         const file = item.getAsFile();
         setSelectedFiles([...selectedFiles, file]);
-        break; // 只处理第一个文件
+        break; // 每次仅快捷粘贴并拦截第一个单张文件
       }
     }
   };
 
+  // 9. 拖拽物理松手行为拦截器
   const handleDrop = (event) => {
     event.preventDefault();
     const files = event.dataTransfer.files;
@@ -274,19 +253,19 @@ export default function Home() {
     }
   };
 
+  // 10. 拖拽进入容器的视觉预备过程拦截
   const handleDragOver = (event) => {
     event.preventDefault();
   };
 
-  // 根据图片数量动态计算容器高度
+  // 动态依待传项目数量来递增容器缩略框尺寸
   const calculateMinHeight = () => {
     const rows = Math.ceil(selectedFiles.length / 4);
     return `${rows * 100}px`;
   };
 
-  // 处理点击图片放大
+  // 11. 处理点击缩略图进行大图/视频全屏级灯箱展示
   const handleImageClick = (index) => {
-
     if (selectedFiles[index].type.startsWith('image/')) {
       setBoxtype("img");
     } else if (selectedFiles[index].type.startsWith('video/')) {
@@ -310,7 +289,6 @@ export default function Home() {
   const handleCopy = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      // alert('已成功复制到剪贴板');
       toast.success(`Link copied successfully`);
     } catch (err) {
       toast.error("Failed to copy link")
@@ -334,7 +312,7 @@ export default function Home() {
     setSelectedImage(imageUrl);
   };
 
-
+  // 按类型解析预览图渲染
   const renderFile = (data, index) => {
     const fileUrl = data.url;
     if (data.type.startsWith('image/')) {
@@ -362,7 +340,6 @@ export default function Home() {
       );
 
     } else {
-      // 其他文件类型
       return (
         <img
           key={`image-${index}`}
@@ -373,12 +350,10 @@ export default function Home() {
         />
       );
     }
-
-
-
   };
 
 
+  // 12. 页签内联格式化展现器控制：支持多类链接格式转换一键复制
   const renderTabContent = () => {
     switch (activeTab) {
       case 'preview':
@@ -462,28 +437,57 @@ export default function Home() {
     signOut({ callbackUrl: '/' });
   };
 
+  // 13. 右上角导航按钮动态渲染：根据会话鉴权状态及身份动态组合图标按钮
   const renderButton = () => {
-    if (!isAuthapi) {
-      return (
-        <Link href="/login">
-          <LoginButton>Login</LoginButton>
-        </Link>
-      );
-    }
     switch (Loginuser) {
       case 'user':
-        return <LoginButton onClick={handleSignOut}>Logout</LoginButton>;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md border border-zinc-200 uppercase tracking-wider">User</span>
+            <button
+              onClick={handleSignOut}
+              title="Logout"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:text-red-500 hover:bg-zinc-50 transition-all duration-150 shadow-sm"
+            >
+              <FontAwesomeIcon icon={faSignOutAlt} className="w-4 h-4" />
+            </button>
+          </div>
+        );
       case 'admin':
         return (
-          <Link href="/admin">
-            <LoginButton>Admin</LoginButton>
-          </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold bg-zinc-900 text-white px-2 py-1 rounded-md border border-zinc-800 uppercase tracking-wider">Admin</span>
+            <Link href="/admin">
+              <button
+                id="header-admin-btn"
+                title="Admin Dashboard"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:text-black hover:bg-zinc-50 transition-all duration-150 shadow-sm"
+              >
+                <FontAwesomeIcon icon={faCog} className="w-4 h-4" />
+              </button>
+            </Link>
+            <button
+              onClick={handleSignOut}
+              title="Logout"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:text-red-500 hover:bg-zinc-50 transition-all duration-150 shadow-sm"
+            >
+              <FontAwesomeIcon icon={faSignOutAlt} className="w-4 h-4" />
+            </button>
+          </div>
         );
       default:
+        // 默认未登录状态（即 Visitor 访客组，无特殊修改与上传权限，只具备浏览权）
         return (
-          <Link href="/login">
-            <LoginButton>Login</LoginButton>
-          </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold bg-zinc-100 text-zinc-500 px-2 py-1 rounded-md border border-zinc-200 uppercase tracking-wider">Visitor</span>
+            <button
+              onClick={() => setIsLoginModalOpen(true)}
+              title="Login"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:text-black hover:bg-zinc-50 transition-all duration-150 shadow-sm"
+            >
+              <FontAwesomeIcon icon={faSignInAlt} className="w-4 h-4" />
+            </button>
+          </div>
         );
     }
   };
@@ -491,6 +495,7 @@ export default function Home() {
 
   return (
     <main className=" overflow-auto h-full flex w-full min-h-screen flex-col items-center justify-between">
+      {/* 顶部通栏导航 */}
       <header className="fixed top-0 h-[50px] left-0 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md flex z-50 justify-center items-center">
         <div className="flex justify-between items-center w-full max-w-5xl px-6">
           <nav className="text-sm font-bold tracking-tight text-zinc-900">IMAGE HUB</nav>
@@ -499,6 +504,7 @@ export default function Home() {
       </header>
       <div className="mt-[60px] w-9/10 sm:w-9/10 md:w-9/10 lg:w-9/10 xl:w-3/5 2xl:w-2/3">
 
+        {/* 欢迎语及通道上传控制 */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div className="flex flex-col">
             <h1 className="text-zinc-900 text-2xl font-bold tracking-tight">Upload Center</h1>
@@ -515,11 +521,12 @@ export default function Home() {
               style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1.25rem' }}
             >
               <option value="r2">Cloudflare R2</option>
-              <option value="tg">Telegram (Old)</option>
               <option value="tgchannel">Telegram Channel</option>
             </select>
           </div>
         </div>
+
+        {/* 拖拽式及粘贴预览主容器 */}
         <div
           className="border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50 hover:bg-zinc-50 transition-colors relative"
           onDrop={handleDrop}
@@ -586,6 +593,8 @@ export default function Home() {
 
           </div>
         </div>
+
+        {/* 底部选择、清除和上传动作条 */}
         <div className="w-full rounded-lg border border-zinc-200 shadow-sm overflow-hidden mt-6 grid grid-cols-8 bg-white">
           <div className="md:col-span-1 col-span-8">
             <label
@@ -658,6 +667,8 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* 媒体全屏高级图片大图/视频展示悬浮控制灯箱 */}
       {selectedImage && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={handleCloseImage}>
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md"></div>
@@ -704,6 +715,14 @@ export default function Home() {
       <div className="fixed inset-x-0 bottom-0 h-[50px] bg-white border-t border-zinc-200 w-full flex z-50 justify-center items-center">
         <Footer />
       </div>
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
+        onSuccess={async () => {
+          await isAuth();
+          setIsLoginModalOpen(false);
+        }}
+      />
     </main>
   );
 }
