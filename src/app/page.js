@@ -93,8 +93,9 @@ export default function Home() {
   // 3. 统计计数：通过安全数据拉取总数
   const getTotal = async () => {
     try {
-      const res = await fetch(`/api/total`, {
+      const res = await fetch(`/api/total?_t=${Date.now()}`, {
         method: "GET",
+        cache: "no-store",
         headers: {
           'Content-Type': 'application/json'
         }

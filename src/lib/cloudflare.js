@@ -249,20 +249,30 @@ class LocalD1PreparedStatement {
       return { success: true, deleted: initialLen - dbData.imginfo.length };
     }
 
+    if (sql.match(/DELETE\s+FROM\s+tgimglog\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
+      const deleteMatch = sql.match(/DELETE\s+FROM\s+tgimglog\s+WHERE\s+url\s*=\s*'([^']+)'/i);
+      const url = deleteMatch[1];
+      const initialLen = dbData.tgimglog.length;
+      dbData.tgimglog = dbData.tgimglog.filter(item => item.url !== url);
+      return { success: true, deleted: initialLen - dbData.tgimglog.length };
+    }
+
     // 8. 多表联查 (tgimglog 与 imginfo 的关联查询实现)
     if (sql.includes('tgimglog JOIN imginfo')) {
       let list = [];
       dbData.tgimglog.forEach(log => {
         const info = dbData.imginfo.find(i => i.url === log.url);
-        list.push({
-          id: log.id,
-          url: log.url,
-          referer: log.referer,
-          ip: log.ip,
-          time: log.time,
-          rating: info ? info.rating : -1,
-          total: info ? info.total : 1
-        });
+        if (info) {
+          list.push({
+            id: log.id,
+            url: log.url,
+            referer: log.referer,
+            ip: log.ip,
+            time: log.time,
+            rating: info.rating,
+            total: info.total
+          });
+        }
       });
 
       const likeMatch = sql.match(/tgimglog\.url\s+LIKE\s+'%([^%']+)%'/i) || sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);

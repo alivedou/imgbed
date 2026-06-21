@@ -201,7 +201,14 @@ export async function GET(request, { params }) {
           "success": true,
           "message": "success",
           "total": total.total
-        }, { headers: corsHeaders });
+        }, { 
+          headers: {
+            ...corsHeaders,
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          } 
+        });
       } else {
         return Response.json({
           "code": 500,
@@ -982,6 +989,11 @@ export async function DELETE(request, { params }) {
 
       // 从数据库关联记录中永久清除该数据
       const setData = await env.IMG.prepare(`DELETE FROM imginfo WHERE url='${name}'`).run();
+      try {
+        await env.IMG.prepare(`DELETE FROM tgimglog WHERE url='${name}'`).run();
+      } catch (logDeleteErr) {
+        console.error('Failed to clean up tgimglog records:', logDeleteErr);
+      }
       return Response.json({
         "code": 200,
         "success": true,
