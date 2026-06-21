@@ -17,15 +17,7 @@ export function Footer() {
     <footer className="w-full h-full text-center bg-white flex flex-col justify-center items-center">
       <div>
         <p className="text-[10px] text-zinc-400 font-medium">
-          &copy; 2024 IMAGE HUB • Please adhere to local regulations • Built with Cloudflare • {' '}
-          <Link 
-            href="https://github.com/x-dr/telegraph-Image"
-            className="text-zinc-600 hover:text-black transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            GitHub
-          </Link>
+          Copyright &copy; 2026 <Link href="https://github.com/alivedou/imgbed" className="text-zinc-600 hover:text-black transition-colors" target="_blank" rel="noopener noreferrer">imgbed</Link> | Powered by adou | Open Source under MIT License
         </p>
       </div>
     </footer>
