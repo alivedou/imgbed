@@ -53,10 +53,21 @@ async function get_nowTime() {
 // 在本地数据库 imginfo 表中插入全新的图片记录（例如初始访问频次为1，保存上传者IP等）
 async function insertImageData(env, src, referer, ip, rating, time) {
   try {
+    const existing = await env.prepare(`SELECT * FROM imginfo WHERE url='${src}'`).first();
+    if (existing) {
+      await env.prepare(`UPDATE imginfo SET total = total + 1 WHERE url='${src}'`).run();
+      return;
+    }
     await env.prepare(
       `INSERT INTO imginfo (url, referer, ip, rating, total, time)
        VALUES ('${src}', '${referer}', '${ip}', ${rating}, 1, '${time}')`
     ).run();
+    // 自动为新插入的图片追加一条属于此刻的初始访问或上传行为日志，从而使内连接 JOIN 查询时刻立即能够在高安全性后台完整显示该图
+    try {
+      await insertTgImgLog(env, src, referer, ip, time);
+    } catch (logErr) {
+      console.error('Failed to auto-insert companion tgimglog:', logErr);
+    }
   } catch (error) {
     console.error('insertImageData error:', error);
   }
@@ -823,7 +834,15 @@ export async function POST(request, { params }) {
             }
           }
           await insertImageData(env.IMG, `/cfile/${fileData.file_id}${message_id ? `?mid=${message_id}` : ''}`, Referer, clientIp, -1, nowTime);
-          return Response.json({ "msg": error.message, "message": error.message, "success": false }, { status: 500, headers: corsHeaders });
+          return Response.json({
+            ...data,
+            msg: "2",
+            Referer,
+            clientIp,
+            rating_index: -1,
+            nowTime,
+            warning: error.message
+          }, { status: 200, headers: corsHeaders });
         }
       }
     } catch (error) {
@@ -901,7 +920,15 @@ export async function POST(request, { params }) {
             }
           }
           await insertImageData(env.IMG, `/rfile/${filename}`, Referer, clientIp, -1, nowTime);
-          return Response.json({ "msg": error.message }, { status: 500, headers: corsHeaders });
+          return Response.json({
+            ...data,
+            msg: "2",
+            Referer,
+            clientIp,
+            rating_index: -1,
+            nowTime,
+            warning: error.message
+          }, { status: 200, headers: corsHeaders });
         }
       }
     } catch (error) {

@@ -44,11 +44,16 @@ export default function Home() {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
   }
 
-  // 初始化拉取各接口环境与服务器态势
+  // 初始化拉取各接口环境与服务器态势并建立动态轮询
   useEffect(() => {
     ip();
     getTotal();
     isAuth();
+    // 自动轻量化轮询：秒级同步图床总量计数，防止因跨标签管理物理删除产生显示失衡
+    const totalInterval = setInterval(getTotal, 10000);
+    return () => {
+      clearInterval(totalInterval);
+    };
   }, []);
 
   // 1. IP 拉取：异步检测用户的当前局网/公网出口 IP 并更新回显

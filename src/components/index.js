@@ -93,7 +93,7 @@ const getFileExtension = (url) => {
 // 重构代理之后的图片物理获取路径
 const getImgUrl = (url) => {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return url.startsWith("/file/") || url.startsWith("/cfile/") ? `${origin}/api${url}` : url;
+  return url.startsWith("/file/") || url.startsWith("/cfile/") || url.startsWith("/rfile/") ? `${origin}/api${url}` : url;
 };
 
 export function ImageModal({ selectedImageIndex, setSelectedImageIndex, data }) {

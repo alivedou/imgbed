@@ -18,7 +18,7 @@ export default function Admin() {
   // 回调拉取主分页列表数据
   const getListdata = useCallback(async (page) => {
     try {
-      const res = await fetch(`/api/admin/log`, {
+      const res = await fetch(`/api/admin/list`, {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -33,7 +33,9 @@ export default function Admin() {
       if (!res_data?.success) {
         toast.error(res_data.message)
       } else {
-        setListData(res_data.data)
+        // 由于可能存在的历史脏数据，前端按 URL 去重
+        const uniqueData = Array.from(new Map((res_data.data || []).map(item => [item.url, item])).values());
+        setListData(uniqueData)
         const totalPages = Math.ceil(res_data.total / 10);
         setSearchTotal(totalPages);
       }
@@ -47,7 +49,7 @@ export default function Admin() {
   // 页数变动时自动重新拉取图表
   useEffect(() => {
     getListdata(currentPage)
-  }, [currentPage]);
+  }, [currentPage, getListdata]);
 
   // 分页控制按钮：向后翻页
   const handleNextPage = () => {

@@ -27,14 +27,21 @@ export default auth(async (req) => {
 
     // 1. 未登录情况处理
     if (!isAuthenticated) {
-        const isAuthServicePath = nextUrl.pathname.startsWith('/api/auth');
+        const isAuthServicePath = nextUrl.pathname.startsWith('/api/auth') || nextUrl.pathname === '/api/local-store';
 
-        // 所有涉及写入、上传或修改参数的请求(包括 POST 上传文件到 R2 / Telegram 通道 / TG等)，未登录的 Visitor 身份一律拦截拒绝
-        if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') && !isAuthServicePath) {
+        // 如果开启了上传鉴权，则所有涉及写入、上传或修改参数的请求(包括 POST 上传文件到 R2 / Telegram 通道 / TG等)，未登录的 Visitor 身份一律拦截拒绝
+        if (enableAuthapi && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') && !isAuthServicePath && !isAPI_ADMIN) {
             return Response.json(
                 { status: "fail", message: "Visitors have no upload or modification permissions. Please login first !", success: false },
                 { status: 401 }
             );
+        }
+        // 对于未开启强制认证的情况，防范游客调用 admin 或未知危险接口，应当保持 isAPI_ADMIN 下 POST 等请求拦截
+        if (isAPI_ADMIN && (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')) {
+             return Response.json(
+                 { status: "fail", message: "You are not logged in by admin !", success: false },
+                 { status: 401 }
+             );
         }
 
         // 请求管理员 API 却未登录，返回 401 失败信息
@@ -82,8 +89,14 @@ export default auth(async (req) => {
     // 3. 已登录，属于普通用户角色
     if (role === 'user') {
         // 普通用户不允许访问管理员 API 或管理员控制面板页面
-        if (isAPI_ADMIN || isADMIN_PAGE) {
-            return Response.redirect(new URL(LOGIN, nextUrl));
+        if (isAPI_ADMIN) {
+            return Response.json(
+                { status: "fail", message: "You do not have admin permissions!", success: false },
+                { status: 403 }
+            );
+        }
+        if (isADMIN_PAGE) {
+            return Response.redirect(new URL(ROOT, nextUrl));
         }
     }
 

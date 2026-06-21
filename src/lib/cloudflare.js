@@ -55,6 +55,42 @@ class LocalD1Database {
     }
   }
 
+  // 异步通过 local-store 端点加载数据，支持在 Edge Runtime 屏蔽了fs的环境中依然能够持久化
+  async _readAsync() {
+    try {
+      const res = await fetch('http://127.0.0.1:3000/api/local-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'd1_read' })
+      });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.success && body.data) {
+          globalThis.__d1Store = body.data;
+          return globalThis.__d1Store;
+        }
+      }
+    } catch (e) {
+      console.error("Local D1 Async Read Error:", e);
+    }
+    return this._read();
+  }
+
+  // 异步通过 local-store 端点保存数据
+  async _writeAsync(data) {
+    globalThis.__d1Store = data;
+    try {
+      await fetch('http://127.0.0.1:3000/api/local-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'd1_write', data })
+      });
+    } catch (e) {
+      console.error("Local D1 Async Write Error:", e);
+    }
+    this._write(data);
+  }
+
   // 预编译 SQL 语句，返回预编译包装类的实例
   prepare(sql) {
     return new LocalD1PreparedStatement(sql, this);
@@ -77,22 +113,22 @@ class LocalD1PreparedStatement {
 
   // 执行写操作或对结构有改变的操作（如 INSERT、UPDATE、DELETE）
   async run() {
-    const data = this.db._read();
+    const data = await this.db._readAsync();
     const result = this._executeRaw(data, true);
-    this.db._write(data);
+    await this.db._writeAsync(data);
     return result || { success: true };
   }
 
   // 获取多行查询结果
   async all() {
-    const data = this.db._read();
+    const data = await this.db._readAsync();
     const results = this._executeRaw(data, false);
     return { results: results || [] };
   }
 
   // 获取第一行记录，或特定的一列
   async first(colName) {
-    const data = this.db._read();
+    const data = await this.db._readAsync();
     const results = this._executeRaw(data, false);
     if (!results || results.length === 0) return null;
     if (colName) {
@@ -298,6 +334,12 @@ class LocalD1PreparedStatement {
     if (sql.startsWith('SELECT * FROM imginfo')) {
       let list = [...dbData.imginfo];
 
+      const exactMatch = sql.match(/WHERE\s+url\s*=\s*'([^']+)'/i);
+      if (exactMatch) {
+        const queryUrl = exactMatch[1];
+        list = list.filter(item => item.url === queryUrl);
+      }
+
       const likeMatch = sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
       if (likeMatch) {
         const query = likeMatch[1].toLowerCase();
@@ -401,7 +443,24 @@ class LocalR2Bucket {
       body: content
     });
 
-    // 持久化到本地磁盘
+    // 同时异步持久化到本地/nodejs后端容器磁盘中
+    try {
+      const bodyBase64 = Buffer.from(content).toString('base64');
+      await fetch('http://127.0.0.1:3000/api/local-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'r2_put',
+          key,
+          meta: item,
+          bodyBase64
+        })
+      });
+    } catch (e) {
+      console.error("Local R2 Async Put Error:", e);
+    }
+
+    // 持久化到本地磁盘 (仅在支持fs的环境中)
     if (this.fs && this.dirPath) {
       try {
         const metadataPath = this.path.join(this.dirPath, `${key}.meta.json`);
@@ -439,7 +498,46 @@ class LocalR2Bucket {
       };
     }
 
-    // 回退到冷盘机制
+    // 尝试从本地/nodejs后端容器端点进行读取
+    try {
+      const res = await fetch('http://127.0.0.1:3000/api/local-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'r2_get', key })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.exists) {
+          const meta = result.meta;
+          const bodyBuffer = Buffer.from(result.bodyBase64, 'base64');
+          const uint8Array = new Uint8Array(bodyBuffer);
+
+          if (globalThis.__r2Store) {
+            globalThis.__r2Store.set(key, {
+              meta,
+              body: uint8Array
+            });
+          }
+
+          return {
+            ...meta,
+            httpEtag: meta.etag,
+            body: uint8Array,
+            writeHttpMetadata(headers) {
+              if (meta.httpMetadata && headers) {
+                Object.entries(meta.httpMetadata).forEach(([h, v]) => {
+                  headers.set(h, v);
+                });
+              }
+            }
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Local R2 Async Get Error:", e);
+    }
+
+    // 回退到本地磁盘机制 (仅在支持fs的环境中)
     if (this.fs && this.dirPath) {
       try {
         const metadataPath = this.path.join(this.dirPath, `${key}.meta.json`);
@@ -483,6 +581,17 @@ class LocalR2Bucket {
     if (globalThis.__r2Store) {
       globalThis.__r2Store.delete(key);
     }
+    // 异步清除远端 nodejs 持久化层
+    try {
+      await fetch('http://127.0.0.1:3000/api/local-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'r2_delete', key })
+      });
+    } catch (e) {
+      console.error("Local R2 Async Delete Error:", e);
+    }
+
     if (this.fs && this.dirPath) {
       try {
         const metadataPath = this.path.join(this.dirPath, `${key}.meta.json`);

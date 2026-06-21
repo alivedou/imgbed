@@ -41,7 +41,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess, isPage = false 
         } else {
           setTimeout(() => {
             if (isPage) {
-              window.location.href = '/admin'; // Page 登录成功后直接跳转到后台
+              window.location.href = username === 'admin' ? '/admin' : '/'; // 根据用户名做简单的角色预判跳转
             } else {
               window.location.reload(); // 延迟刷新页面刷新状态
             }

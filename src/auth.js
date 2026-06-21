@@ -6,6 +6,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     // 配置自定义凭据（Username/Password）登录提供商
     CredentialsProvider({
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" }
+      },
       authorize: async (credentials) => {
         // 清理并去除输入凭据中的首尾空白字符，以防空格或换行等引发问题
         const submittedUsername = (credentials?.username || '').trim();
@@ -32,7 +36,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // 验证管理员身份
         if (submittedUsername === fixedAdminUser && submittedPassword === envAdminPass) {
           const user = {
-            id: 1,
+            id: '1',
             name: fixedAdminUser,
             email: 'admin@example.com',
             role: 'admin',
@@ -44,7 +48,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // 验证普通用户
         if (submittedUsername === fixedRegularUser && submittedPassword === envRegularPass) {
           const user = {
-            id: 2,
+            id: '2',
             name: fixedRegularUser,
             email: 'user@example.com',
             role: 'user',
@@ -68,11 +72,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   // 签名秘钥，若环境变量中未指定则使用备用秘钥
   secret: process.env.AUTH_SECRET || process.env.SECRET || '00Fv/YUm0enwy04IgP4KoNOWLODe2iJ1tvBzr+4kEZ8=',
-  useSecureCookies: true,   // 启用安全 Cookie 选项
+  useSecureCookies: process.env.NODE_ENV === 'production',
   cookies: {
-    // 基础 Session Token 跨站及协议级别策略配置
     sessionToken: {
-      name: `__Secure-next-auth.session-token`,
+      name: `authjs.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'none',
@@ -80,18 +83,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         secure: true,
       },
     },
-    // Callback 链接安全策略配置
     callbackUrl: {
-      name: `__Secure-next-auth.callback-url`,
+      name: `authjs.callback-url`,
       options: {
         sameSite: 'none',
         path: '/',
         secure: true,
       },
     },
-    // CSRF 保护 Token 配置
     csrfToken: {
-      name: `__Host-next-auth.csrf-token`,
+      name: `authjs.csrf-token`,
       options: {
         httpOnly: true,
         sameSite: 'none',
