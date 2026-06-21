@@ -1,14 +1,14 @@
 {
-  "imginfo": [
+  "imginfo": [],
+  "tgimglog": [],
+  "system_config": [
     {
-      "id": 1,
-      "url": "/cfile/xxx",
-      "referer": "http://localhost:3000/",
-      "ip": "127.0.0.1",
-      "rating": -1,
-      "total": 1,
-      "time": "2026-06-11T10:10:10Z"
+      "key": "ENABLE_AUTH_API",
+      "value": "false"
+    },
+    {
+      "key": "PROXYALLIMG",
+      "value": "false"
     }
-  ],
-  "tgimglog": []
+  ]
 }

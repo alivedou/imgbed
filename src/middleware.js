@@ -10,7 +10,7 @@ const ADMIN_PAGE = "/admin"
 const AUTH_API = "/api/enableauthapi"
 
 // 判断是否开启了用户授权 API
-const enableAuthapi = process.env.ENABLE_AUTH_API === 'true';
+const enableAuthapiDefault = false;
 
 // 导出带有自定义中间件行为的 auth 方法作为 default
 export default auth(async (req) => {
@@ -19,6 +19,27 @@ export default auth(async (req) => {
 
     // 是否已登录认证
     const isAuthenticated = !!req.auth;
+
+    // 动态获取是否开启了用户授权 API
+    let enableAuthapi = enableAuthapiDefault;
+    const isBypass =
+        nextUrl.pathname.startsWith('/api/auth') || 
+        nextUrl.pathname === '/api/local-store' || 
+        nextUrl.pathname === '/api/enableauthapi/isauth' ||
+        nextUrl.pathname === '/api/admin/config';
+
+    if (!isBypass) {
+        try {
+            const origin = nextUrl.origin;
+            const res = await fetch(`${origin}/api/enableauthapi/isauth`);
+            if (res.ok) {
+                const data = await res.json();
+                enableAuthapi = data.enableAuthapi === true;
+            }
+        } catch (e) {
+            enableAuthapi = process.env.ENABLE_AUTH_API === 'true';
+        }
+    }
 
     // 当前请求路径属性匹配
     const isAPI_ADMIN = nextUrl.pathname.startsWith(API_ADMIN);

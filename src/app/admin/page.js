@@ -14,6 +14,64 @@ export default function Admin() {
   const [searchTotal, setSearchTotal] = useState(0); // 统计搜索或过滤结果匹配出的总可分页数
   const [inputPage, setInputPage] = useState(1); // 输入跳转的页码绑定
   const [searchQuery, setSearchQuery] = useState(''); // 搜索框绑定的字符串查询对象
+  const [enableAuthapi, setEnableAuthapi] = useState(false);
+  const [proxyAllImg, setProxyAllImg] = useState(false);
+  const [tgBotToken, setTgBotToken] = useState('');
+  const [tgChatId, setTgChatId] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setEnableAuthapi(data.data.enableAuthapi);
+          setProxyAllImg(data.data.proxyAllImg);
+          setTgBotToken(data.data.tgBotToken || '');
+          setTgChatId(data.data.tgChatId || '');
+        }
+      });
+  }, []);
+
+  const handleConfigChange = async (key, value) => {
+    try {
+       const payload = {
+         enableAuthapi,
+         proxyAllImg,
+         tgBotToken,
+         tgChatId
+       };
+       if (key === 'auth') payload.enableAuthapi = value;
+       if (key === 'proxy') payload.proxyAllImg = value;
+       if (key === 'tg_bot_token') payload.tgBotToken = value;
+       if (key === 'tg_chat_id') payload.tgChatId = value;
+       if (key === 'all_tg') {
+         payload.tgBotToken = value.tgBotToken;
+         payload.tgChatId = value.tgChatId;
+       }
+
+       const res = await fetch('/api/admin/config', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(payload)
+       });
+       const data = await res.json();
+       if (data.success) {
+          toast.success(data.message);
+          if (key === 'auth') setEnableAuthapi(value);
+          if (key === 'proxy') setProxyAllImg(value);
+          if (key === 'tg_bot_token') setTgBotToken(value);
+          if (key === 'tg_chat_id') setTgChatId(value);
+          if (key === 'all_tg') {
+             setTgBotToken(value.tgBotToken);
+             setTgChatId(value.tgChatId);
+          }
+       } else {
+          toast.error(data.message || 'Failed to update settings');
+       }
+    } catch(e) {
+       toast.error(e.message);
+    }
+  }
 
   // 回调拉取主分页列表数据
   const getListdata = useCallback(async (page) => {
@@ -134,6 +192,58 @@ export default function Admin() {
 
         {/* 主数据列表及组件展示区域 */}
         <main className="my-[60px] w-9/10  sm:w-9/10 md:w-9/10 lg:w-9/10 xl:w-3/5 2xl:w-full">
+          <div className="flex flex-col bg-white border border-zinc-200 rounded-lg p-5 mb-4 gap-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-6 pb-4 border-b border-zinc-100">
+              <span className="font-bold text-sm tracking-tight text-zinc-900 pr-4">System Settings</span>
+              <label className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
+                <div className="relative">
+                  <input type="checkbox" checked={enableAuthapi} onChange={(e) => handleConfigChange('auth', e.target.checked)} className="sr-only" />
+                  <div className={`block w-10 h-6 rounded-full transition-colors ${enableAuthapi ? 'bg-black' : 'bg-zinc-200'}`}></div>
+                  <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${enableAuthapi ? 'transform translate-x-4' : ''}`}></div>
+                </div>
+                <span className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Enable Upload Auth</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
+                <div className="relative">
+                  <input type="checkbox" checked={proxyAllImg} onChange={(e) => handleConfigChange('proxy', e.target.checked)} className="sr-only" />
+                  <div className={`block w-10 h-6 rounded-full transition-colors ${proxyAllImg ? 'bg-black' : 'bg-zinc-200'}`}></div>
+                  <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${proxyAllImg ? 'transform translate-x-4' : ''}`}></div>
+                </div>
+                <span className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Proxy All Images</span>
+              </label>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-end gap-4">
+              <div className="flex-1 w-full">
+                <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">Telegram Bot Token</label>
+                <input
+                  type="password"
+                  value={tgBotToken}
+                  onChange={(e) => setTgBotToken(e.target.value)}
+                  placeholder="Enter TG_BOT_TOKEN"
+                  className="w-full border border-zinc-200 rounded-md py-1.5 px-3 text-xs focus:border-black focus:ring-0 outline-none transition-colors bg-zinc-50/50 hover:bg-zinc-50 text-zinc-700"
+                />
+              </div>
+              <div className="flex-1 w-full">
+                <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">Telegram Chat ID</label>
+                <input
+                  type="text"
+                  value={tgChatId}
+                  onChange={(e) => setTgChatId(e.target.value)}
+                  placeholder="Enter TG_CHAT_ID (e.g. -1001234567)"
+                  className="w-full border border-zinc-200 rounded-md py-1.5 px-3 text-xs focus:border-black focus:ring-0 outline-none transition-colors bg-zinc-50/50 hover:bg-zinc-50 text-zinc-700"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  await handleConfigChange('all_tg', { tgBotToken, tgChatId });
+                }}
+                className="w-full sm:w-auto h-9 px-4 rounded-md bg-black hover:bg-zinc-800 text-white text-xs font-semibold tracking-wider uppercase transition-colors shrink-0"
+              >
+                Save Channels
+              </button>
+            </div>
+          </div>
 
           <Table data={listData} />
 

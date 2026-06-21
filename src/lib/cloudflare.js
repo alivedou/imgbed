@@ -143,6 +143,29 @@ class LocalD1PreparedStatement {
 
     if (!dbData.tgimglog) dbData.tgimglog = [];
     if (!dbData.imginfo) dbData.imginfo = [];
+    if (!dbData.system_config) dbData.system_config = [];
+
+    // 0. system_config
+    if (sql.match(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+system_config/i)) {
+      return { success: true };
+    }
+    if (sql.match(/SELECT\s+value\s+FROM\s+system_config\s+WHERE\s+key\s*=\s*'([^']+)'/i)) {
+      const matchKey = sql.match(/SELECT\s+value\s+FROM\s+system_config\s+WHERE\s+key\s*=\s*'([^']+)'/i)[1];
+      const found = dbData.system_config.find(item => item.key === matchKey);
+      return found ? [{ value: found.value }] : [];
+    }
+    if (sql.match(/INSERT\s+INTO\s+system_config\s*\(key,\s*value\)\s*VALUES\s*\('([^']+)',\s*'([^']+)'\)\s*ON\s+CONFLICT\(key\)\s+DO\s+UPDATE\s+SET\s+value=excluded\.value/i)) {
+      const match = sql.match(/INSERT\s+INTO\s+system_config\s*\(key,\s*value\)\s*VALUES\s*\('([^']+)',\s*'([^']+)'\)\s*ON\s+CONFLICT\(key\)\s+DO\s+UPDATE\s+SET\s+value=excluded\.value/i);
+      const key = match[1];
+      const value = match[2];
+      const idx = dbData.system_config.findIndex(item => item.key === key);
+      if (idx !== -1) {
+        dbData.system_config[idx].value = value;
+      } else {
+        dbData.system_config.push({ key, value });
+      }
+      return { success: true };
+    }
 
     // 1. 插入流量访问日志
     if (sql.startsWith('INSERT INTO tgimglog')) {

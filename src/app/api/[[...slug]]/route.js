@@ -107,10 +107,11 @@ async function getModerateContentRating(env, url, type = 'telegra') {
         targetUrl = `https://telegra.ph${url}`;
       } else if (type === 'tg') {
         const filePath = await getFile_path(env, url);
+        const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
         if (filePath && filePath !== 'error') {
-          targetUrl = `https://api.telegram.org/file/bot${env.TG_BOT_TOKEN}/${filePath}`;
+          targetUrl = `https://api.telegram.org/file/bot${tgBotToken}/${filePath}`;
         } else {
-          targetUrl = `https://api.telegram.org/file/bot${env.TG_BOT_TOKEN}/${url}`;
+          targetUrl = `https://api.telegram.org/file/bot${tgBotToken}/${url}`;
         }
       }
       const res = await fetch(`${ratingApi}url=${targetUrl}`);
@@ -126,7 +127,8 @@ async function getModerateContentRating(env, url, type = 'telegra') {
 // 根据 Telegram 文件 ID，动态调用 Telegram API 换取该文件在 TG 服务端的物理相对路径
 async function getFile_path(env, file_id) {
   try {
-    const url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/getFile?file_id=${file_id}`;
+    const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
+    const url = `https://api.telegram.org/bot${tgBotToken}/getFile?file_id=${file_id}`;
     const res = await fetch(url, {
       method: 'GET',
       headers: {
@@ -168,6 +170,32 @@ const getFileDetail = async (response) => {
     return null;
   }
 };
+
+// 动态读取系统配置
+export async function getDynamicConfig(env, key, defaultVal = 'false') {
+  try {
+    if (env.IMG) {
+      await env.IMG.prepare(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`).run();
+      const row = await env.IMG.prepare(`SELECT value FROM system_config WHERE key = '${key}'`).first();
+      if (row && row.value !== undefined) {
+        return row.value;
+      }
+    }
+  } catch (e) {}
+  return (env[key] !== undefined ? String(env[key]) : (process.env[key] !== undefined ? String(process.env[key]) : defaultVal));
+}
+
+// 动态设置系统配置
+export async function setDynamicConfig(env, key, value) {
+  try {
+    if (env.IMG) {
+      await env.IMG.prepare(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`).run();
+      await env.IMG.prepare(`INSERT INTO system_config (key, value) VALUES ('${key}', '${value}') ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run();
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
 
 // 辅助进行访问频次记录的记录更新管道
 async function logRequest(env, path, name, referer, ip) {
@@ -244,7 +272,7 @@ export async function GET(request, { params }) {
 
   // 4. GET /api/enableauthapi/isauth ：检查当前访问用户在 session 下的权限状态与强制登陆限制是否开启
   if (path === 'enableauthapi/isauth') {
-    const enableAuthapi = env.ENABLE_AUTH_API === 'true' || process.env.ENABLE_AUTH_API === 'true';
+    const enableAuthapi = (await getDynamicConfig(env, 'ENABLE_AUTH_API')) === 'true';
     const session = await auth();
     const role = session?.user?.role;
     return Response.json({
@@ -261,7 +289,24 @@ export async function GET(request, { params }) {
     return Response.json({ ip: clientIp }, { headers: corsHeaders });
   }
 
-  // 6. GET /api/file/[name] ：通过反向代理将 Telegraph 的静态资源图片安全送出，并在数据库端记录统计和自动鉴黄拦截操作
+  // 6. GET /api/admin/config ：管理员获取系统配置
+  if (path === 'admin/config') {
+    const enableAuthapi = (await getDynamicConfig(env, 'ENABLE_AUTH_API')) === 'true';
+    const proxyAllImg = (await getDynamicConfig(env, 'PROXYALLIMG')) === 'true';
+    const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
+    const tgChatId = await getDynamicConfig(env, 'TG_CHAT_ID', '');
+    return Response.json({
+      success: true,
+      data: {
+        enableAuthapi,
+        proxyAllImg,
+        tgBotToken,
+        tgChatId
+      }
+    }, { headers: corsHeaders });
+  }
+
+  // 7. GET /api/file/[name] ：通过反向代理将 Telegraph 的静态资源图片安全送出，并在数据库端记录统计和自动鉴黄拦截操作
   if (slug && slug[0] === 'file' && slug[1]) {
     const name = slug[1];
     try {
@@ -289,7 +334,8 @@ export async function GET(request, { params }) {
           }
         } else {
           // 如果数据库内无此图片记录，触发新图片的首次鉴黄存储机制
-          if (env.PROXYALLIMG) {
+          const isProxyAllImg = (await getDynamicConfig(env, 'PROXYALLIMG')) === 'true';
+          if (isProxyAllImg) {
             try {
               const rating_index = await getModerateContentRating(env, `/file/${name}`, 'telegra');
               const nowTimeVal = await get_nowTime();
@@ -318,7 +364,10 @@ export async function GET(request, { params }) {
 
   // 7. GET /api/rfile/[name] ：Cloudflare R2 本地/桶存储的最终下载分发及代理判定管道
   if (slug && slug[0] === 'rfile' && slug[1]) {
-    const name = slug[1];
+    let name = slug[1];
+    try {
+      name = decodeURIComponent(name);
+    } catch (_) {}
     if (!env.IMGRS) {
       return Response.json({
         status: 500,
@@ -407,7 +456,8 @@ export async function GET(request, { params }) {
   // 8. GET /api/cfile/[name] ：通过 Telegram 机器人存储通道分发生存图片
   if (slug && slug[0] === 'cfile' && slug[1]) {
     const name = slug[1];
-    if (!env.TG_BOT_TOKEN) {
+    const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
+    if (!tgBotToken) {
       return Response.json({
         status: 500,
         message: `TG_BOT_TOKEN is not Set`,
@@ -448,7 +498,7 @@ export async function GET(request, { params }) {
           success: false
         }, { status: 500, headers: corsHeaders });
       } else {
-        const res = await fetch(`https://api.telegram.org/file/bot${env.TG_BOT_TOKEN}/${file_path}`);
+        const res = await fetch(`https://api.telegram.org/file/bot${tgBotToken}/${file_path}`);
 
         if (res.ok) {
           const fileBuffer = await res.arrayBuffer();
@@ -511,7 +561,7 @@ export async function POST(request, { params }) {
 
   // 1. POST /api/tg ：Telegraph 官方图床上传服务代理
   if (path === 'tg') {
-    const enableAuthapi = env.ENABLE_AUTH_API === 'true' || process.env.ENABLE_AUTH_API === 'true';
+    const enableAuthapi = (await getDynamicConfig(env, 'ENABLE_AUTH_API')) === 'true';
     if (enableAuthapi) {
       // 检查当前访问用户在 session 下的权限状态是否符合普通登录角色
       const session = await auth();
@@ -672,6 +722,26 @@ export async function POST(request, { params }) {
   if (slug && slug[0] === 'admin') {
     const action = slug[1];
     try {
+      if (action === 'config') {
+        const body = await request.json();
+        if (body.hasOwnProperty('enableAuthapi')) {
+          await setDynamicConfig(env, 'ENABLE_AUTH_API', body.enableAuthapi ? 'true' : 'false');
+        }
+        if (body.hasOwnProperty('proxyAllImg')) {
+          await setDynamicConfig(env, 'PROXYALLIMG', body.proxyAllImg ? 'true' : 'false');
+        }
+        if (body.hasOwnProperty('tgBotToken')) {
+          await setDynamicConfig(env, 'TG_BOT_TOKEN', body.tgBotToken || '');
+        }
+        if (body.hasOwnProperty('tgChatId')) {
+          await setDynamicConfig(env, 'TG_CHAT_ID', body.tgChatId || '');
+        }
+        return Response.json({
+          success: true,
+          message: 'Settings updated successfully'
+        }, { headers: corsHeaders });
+      }
+
       // 获取当前数据库所有的图片主数据及关联属性列表
       if (action === 'list') {
         let { page, query } = await request.json();
@@ -742,7 +812,9 @@ export async function POST(request, { params }) {
 
   // 4. POST /api/enableauthapi/tgchannel ：通过 Telegram Bot Token 渠道上传多媒体到指定专属频道
   if (path === 'enableauthapi/tgchannel') {
-    if (!env.TG_BOT_TOKEN || !env.TG_CHAT_ID) {
+    const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
+    const tgChatId = await getDynamicConfig(env, 'TG_CHAT_ID', '');
+    if (!tgBotToken || !tgChatId) {
       return Response.json({
         status: 500,
         message: `TG_BOT_TOKEN or TG_CHAT_ID is not Set`,
@@ -766,9 +838,9 @@ export async function POST(request, { params }) {
       const matchingKey = Object.keys(fileTypeMap).find(key => fileType.startsWith(key));
       const { url: endpoint, type: fileTypevalue } = matchingKey ? fileTypeMap[matchingKey] : defaultType;
 
-      const up_url = `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/${endpoint}`;
+      const up_url = `https://api.telegram.org/bot${tgBotToken}/${endpoint}`;
       let newformData = new FormData();
-      newformData.append("chat_id", env.TG_CHAT_ID);
+      newformData.append("chat_id", tgChatId);
       
       const file = formData.get('file');
       newformData.append(fileTypevalue, file, file.name || "file");
@@ -866,9 +938,23 @@ export async function POST(request, { params }) {
 
     try {
       const formData = await request.formData();
-      const fileType = formData.get('file').type;
-      const filename = formData.get('file').name;
       const file = formData.get('file');
+      const fileType = file.type;
+      const originalName = file.name || 'image.png';
+
+      // 生成安全的、唯一的、无特殊字符的 R2 文件名来防止各种 SQL 嵌入与特殊字符解析及双重编码问题
+      let ext = '.png';
+      const lastDotIndex = originalName.lastIndexOf('.');
+      if (lastDotIndex !== -1) {
+        ext = originalName.slice(lastDotIndex);
+      }
+      // 移除非字母数字的扩展名字符（安全过滤）
+      ext = ext.replace(/[^a-zA-Z0-9.]/g, '');
+      if (!ext) {
+        ext = '.png';
+      }
+      const randomPart = Math.random().toString(36).substring(2, 8);
+      const filename = `r2_${Date.now()}_${randomPart}${ext}`;
 
       const header = new Headers();
       header.set("content-type", fileType);
@@ -981,18 +1067,23 @@ export async function DELETE(request, { params }) {
   if (path === 'admin/delete') {
     try {
       let { name } = await request.json();
+      try {
+        name = decodeURIComponent(name);
+      } catch (_) {}
 
       // --- 远程 Telegram 指定消息撤回删除 ---
       if (name.startsWith('/cfile/')) {
         try {
           const urlObj = new URL(name, 'http://localhost');
           const mid = urlObj.searchParams.get('mid');
-          if (mid && env.TG_BOT_TOKEN && env.TG_CHAT_ID) {
-            await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMessage`, {
+          const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
+          const tgChatId = await getDynamicConfig(env, 'TG_CHAT_ID', '');
+          if (mid && tgBotToken && tgChatId) {
+            await fetch(`https://api.telegram.org/bot${tgBotToken}/deleteMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                chat_id: env.TG_CHAT_ID,
+                chat_id: tgChatId,
                 message_id: parseInt(mid)
               })
             });

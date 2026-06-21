@@ -443,13 +443,12 @@ export default function Home() {
     signOut({ callbackUrl: '/' });
   };
 
-  // 13. 右上角导航按钮动态渲染：根据会话鉴权状态及身份动态组合图标按钮
+  // 13. 右上角导航按钮动态渲染：根据会话鉴权状态动态组合图标按钮
   const renderButton = () => {
     switch (Loginuser) {
       case 'user':
         return (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md border border-zinc-200 uppercase tracking-wider">User</span>
             <button
               onClick={handleSignOut}
               title="Logout"
@@ -462,7 +461,6 @@ export default function Home() {
       case 'admin':
         return (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold bg-zinc-900 text-white px-2 py-1 rounded-md border border-zinc-800 uppercase tracking-wider">Admin</span>
             <Link href="/admin">
               <button
                 id="header-admin-btn"
@@ -485,7 +483,6 @@ export default function Home() {
         // 默认未登录状态（即 Visitor 访客组，无特殊修改与上传权限，只具备浏览权）
         return (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold bg-zinc-100 text-zinc-500 px-2 py-1 rounded-md border border-zinc-200 uppercase tracking-wider">Visitor</span>
             <button
               onClick={() => setIsLoginModalOpen(true)}
               title="Login"
@@ -498,13 +495,21 @@ export default function Home() {
     }
   };
 
-
   return (
     <main className=" overflow-auto h-full flex w-full min-h-screen flex-col items-center justify-between">
       {/* 顶部通栏导航 */}
       <header className="fixed top-0 h-[50px] left-0 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md flex z-50 justify-center items-center">
         <div className="flex justify-between items-center w-full max-w-5xl px-6">
-          <nav className="text-sm font-bold tracking-tight text-zinc-900">IMAGE HUB</nav>
+          <nav className="flex items-center gap-2 text-sm font-bold tracking-tight text-zinc-900">
+            IMAGE HUB
+            {Loginuser === 'admin' ? (
+              <span className="text-[10px] font-semibold bg-zinc-900 text-white px-1.5 py-0.5 rounded uppercase tracking-widest cursor-default">Admin</span>
+            ) : Loginuser === 'user' ? (
+              <span className="text-[10px] font-semibold bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded border border-zinc-200 uppercase tracking-widest cursor-default">User</span>
+            ) : (
+              <span className="text-[10px] font-semibold bg-zinc-100 text-zinc-400 px-1.5 py-0.5 rounded border border-zinc-200 uppercase tracking-widest cursor-default">Visitor</span>
+            )}
+          </nav>
           {renderButton()}
         </div>
       </header>
