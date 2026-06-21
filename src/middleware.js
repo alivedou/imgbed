@@ -27,6 +27,16 @@ export default auth(async (req) => {
 
     // 1. 未登录情况处理
     if (!isAuthenticated) {
+        const isAuthServicePath = nextUrl.pathname.startsWith('/api/auth');
+
+        // 所有涉及写入、上传或修改参数的请求(包括 POST 上传文件到 R2 / Telegram 通道 / TG等)，未登录的 Visitor 身份一律拦截拒绝
+        if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') && !isAuthServicePath) {
+            return Response.json(
+                { status: "fail", message: "Visitors have no upload or modification permissions. Please login first !", success: false },
+                { status: 401 }
+            );
+        }
+
         // 请求管理员 API 却未登录，返回 401 失败信息
         if (isAPI_ADMIN) {
             return Response.json(
@@ -40,13 +50,6 @@ export default auth(async (req) => {
         }
         // 请求用户认证 API，若全局开启了强制认证，则拦截并返回 401
         else if (isAuthAPI) {
-            // 所有涉及写入、上传或修改参数的请求(如 POST 上传文件到 R2 / Telegram 通道)，未登录的 Visitor 身份一律拦截拒绝
-            if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
-                return Response.json(
-                    { status: "fail", message: "Visitors have no upload permissions. Please login first !", success: false },
-                    { status: 401 }
-                );
-            }
             if (enableAuthapi) {
                 return Response.json(
                     { status: "fail", message: "You are not logged in by user !", success: false },
@@ -91,7 +94,6 @@ export const config = {
     matcher: [
         "/",
         "/admin/:path*",
-        "/api/admin/:path*",
-        "/api/enableauthapi/:path*"
+        "/api/:path*"
     ],
 };
