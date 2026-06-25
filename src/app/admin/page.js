@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ToastContainer, toast } from "react-toastify";
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faHome, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
+import { faHome, faSignOutAlt, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 
 // 管理员专用控制面板页面
 export default function Admin() {
@@ -18,6 +18,7 @@ export default function Admin() {
   const [proxyAllImg, setProxyAllImg] = useState(false);
   const [tgBotToken, setTgBotToken] = useState('');
   const [tgChatId, setTgChatId] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     fetch('/api/admin/config')
@@ -192,57 +193,75 @@ export default function Admin() {
 
         {/* 主数据列表及组件展示区域 */}
         <main className="my-[60px] w-9/10  sm:w-9/10 md:w-9/10 lg:w-9/10 xl:w-3/5 2xl:w-full">
-          <div className="flex flex-col bg-white border border-zinc-200 rounded-lg p-5 mb-4 gap-4 shadow-sm">
-            <div className="flex flex-wrap items-center gap-6 pb-4 border-b border-zinc-100">
-              <span className="font-bold text-sm tracking-tight text-zinc-900 pr-4">System Settings</span>
-              <label className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
-                <div className="relative">
-                  <input type="checkbox" checked={enableAuthapi} onChange={(e) => handleConfigChange('auth', e.target.checked)} className="sr-only" />
-                  <div className={`block w-10 h-6 rounded-full transition-colors ${enableAuthapi ? 'bg-black' : 'bg-zinc-200'}`}></div>
-                  <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${enableAuthapi ? 'transform translate-x-4' : ''}`}></div>
-                </div>
-                <span className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Enable Upload Auth</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
-                <div className="relative">
-                  <input type="checkbox" checked={proxyAllImg} onChange={(e) => handleConfigChange('proxy', e.target.checked)} className="sr-only" />
-                  <div className={`block w-10 h-6 rounded-full transition-colors ${proxyAllImg ? 'bg-black' : 'bg-zinc-200'}`}></div>
-                  <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${proxyAllImg ? 'transform translate-x-4' : ''}`}></div>
-                </div>
-                <span className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Proxy All Images</span>
-              </label>
+          <div className="flex flex-col bg-white border border-zinc-200 rounded-lg p-5 mb-4 shadow-sm transition-all duration-300">
+            {/* Clickable Header */}
+            <div 
+              onClick={() => setShowSettings(!showSettings)} 
+              className="flex justify-between items-center cursor-pointer select-none group"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm tracking-tight text-zinc-900 pr-2">System Settings</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-zinc-400 group-hover:text-black transition-colors font-semibold">
+                <span className="text-[10px] uppercase tracking-wider">{showSettings ? "Collapse" : "Expand"}</span>
+                <FontAwesomeIcon icon={showSettings ? faChevronUp : faChevronDown} className="w-3 h-3 transition-transform duration-200" />
+              </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-end gap-4">
-              <div className="flex-1 w-full">
-                <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">Telegram Bot Token</label>
-                <input
-                  type="password"
-                  value={tgBotToken}
-                  onChange={(e) => setTgBotToken(e.target.value)}
-                  placeholder="Enter TG_BOT_TOKEN"
-                  className="w-full border border-zinc-200 rounded-md py-1.5 px-3 text-xs focus:border-black focus:ring-0 outline-none transition-colors bg-zinc-50/50 hover:bg-zinc-50 text-zinc-700"
-                />
+            {/* Collapsible Content */}
+            {showSettings && (
+              <div className="flex flex-col gap-4 mt-4 pt-4 border-t border-zinc-100 animate-fadeIn">
+                <div className="flex flex-wrap items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
+                    <div className="relative">
+                      <input type="checkbox" checked={enableAuthapi} onChange={(e) => handleConfigChange('auth', e.target.checked)} className="sr-only" />
+                      <div className={`block w-10 h-6 rounded-full transition-colors ${enableAuthapi ? 'bg-black' : 'bg-zinc-200'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${enableAuthapi ? 'transform translate-x-4' : ''}`}></div>
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Enable Upload Auth</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80">
+                    <div className="relative">
+                      <input type="checkbox" checked={proxyAllImg} onChange={(e) => handleConfigChange('proxy', e.target.checked)} className="sr-only" />
+                      <div className={`block w-10 h-6 rounded-full transition-colors ${proxyAllImg ? 'bg-black' : 'bg-zinc-200'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${proxyAllImg ? 'transform translate-x-4' : ''}`}></div>
+                    </div>
+                    <span className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Proxy All Images</span>
+                  </label>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-end gap-4">
+                  <div className="flex-1 w-full">
+                    <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">Telegram Bot Token</label>
+                    <input
+                      type="password"
+                      value={tgBotToken}
+                      onChange={(e) => setTgBotToken(e.target.value)}
+                      placeholder="Enter TG_BOT_TOKEN"
+                      className="w-full border border-zinc-200 rounded-md py-1.5 px-3 text-xs focus:border-black focus:ring-0 outline-none transition-colors bg-zinc-50/50 hover:bg-zinc-50 text-zinc-700"
+                    />
+                  </div>
+                  <div className="flex-1 w-full">
+                    <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">Telegram Chat ID</label>
+                    <input
+                      type="text"
+                      value={tgChatId}
+                      onChange={(e) => setTgChatId(e.target.value)}
+                      placeholder="Enter TG_CHAT_ID (e.g. -1001234567)"
+                      className="w-full border border-zinc-200 rounded-md py-1.5 px-3 text-xs focus:border-black focus:ring-0 outline-none transition-colors bg-zinc-50/50 hover:bg-zinc-50 text-zinc-700"
+                    />
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await handleConfigChange('all_tg', { tgBotToken, tgChatId });
+                    }}
+                    className="w-full sm:w-auto h-9 px-4 rounded-md bg-black hover:bg-zinc-800 text-white text-xs font-semibold tracking-wider uppercase transition-colors shrink-0"
+                  >
+                    Save Channels
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 w-full">
-                <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-2">Telegram Chat ID</label>
-                <input
-                  type="text"
-                  value={tgChatId}
-                  onChange={(e) => setTgChatId(e.target.value)}
-                  placeholder="Enter TG_CHAT_ID (e.g. -1001234567)"
-                  className="w-full border border-zinc-200 rounded-md py-1.5 px-3 text-xs focus:border-black focus:ring-0 outline-none transition-colors bg-zinc-50/50 hover:bg-zinc-50 text-zinc-700"
-                />
-              </div>
-              <button
-                onClick={async () => {
-                  await handleConfigChange('all_tg', { tgBotToken, tgChatId });
-                }}
-                className="w-full sm:w-auto h-9 px-4 rounded-md bg-black hover:bg-zinc-800 text-white text-xs font-semibold tracking-wider uppercase transition-colors shrink-0"
-              >
-                Save Channels
-              </button>
-            </div>
+            )}
           </div>
 
           <Table data={listData} />

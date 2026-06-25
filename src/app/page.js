@@ -31,7 +31,12 @@ export default function Home() {
   const [uploading, setUploading] = useState(false); // 进行物理上传时的全局加锁背景遮罩状态
   const [IP, setIP] = useState(''); // 用户端来源 IP 地址
   const [Total, setTotal] = useState('?'); // 全网已承载文件累计总数
-  const [selectedOption, setSelectedOption] = useState('r2'); // 选择将文件上传到的具体网关或渠道D桶
+  const [selectedOption, setSelectedOption] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selected_upload_option') || 'r2';
+    }
+    return 'r2';
+  }); // 选择将文件上传到的具体网关或渠道D桶
   const [isAuthapi, setisAuthapi] = useState(false); // 会话是否已获得登录管理层鉴权
   const [Loginuser, setLoginuser] = useState(''); // 获取当期管理员或用户具体会话身份标识
   const [boxType, setBoxtype] = useState("img"); // 预览浮层内容的类型
@@ -88,7 +93,8 @@ export default function Home() {
         setLoginuser(data.role)
       } else {
         setisAuthapi(false)
-        setSelectedOption("r2")
+        const saved = localStorage.getItem('selected_upload_option') || 'r2';
+        setSelectedOption(saved);
       }
     } catch (error) {
       console.error('Request error (isAuth):', error);
@@ -435,7 +441,9 @@ export default function Home() {
   };
 
   const handleSelectChange = (e) => {
-    setSelectedOption(e.target.value); // 更新选择框的值
+    const value = e.target.value;
+    setSelectedOption(value); // 更新选择框的值
+    localStorage.setItem('selected_upload_option', value);
   };
 
 
@@ -531,8 +539,8 @@ export default function Home() {
               className="text-sm py-1.5 pl-2 pr-8 border border-zinc-200 rounded-md bg-white hover:border-zinc-300 focus:ring-0 focus:outline-none transition-colors appearance-none cursor-pointer min-w-[120px]"
               style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1.25rem' }}
             >
-              <option value="r2">Cloudflare R2</option>
-              <option value="tgchannel">Telegram Channel</option>
+              <option value="r2">R2</option>
+              <option value="tgchannel">TG</option>
             </select>
           </div>
         </div>

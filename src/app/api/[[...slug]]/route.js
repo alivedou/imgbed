@@ -96,32 +96,9 @@ async function getRatingFromDB(DB, url) {
 }
 
 // 调用 ModerateContent 图像智能鉴黄审查 API，自动标记成人/敏感图片（3 代表阻断拦截）
+// 因第三方网站功能不稳定，现已废弃自动评级，默认返回 1 (Safe) 大众级，支持管理员手动审核
 async function getModerateContentRating(env, url, type = 'telegra') {
-  try {
-    const apikey = env.ModerateContentApiKey;
-    const ModerateContentUrl = apikey ? `https://api.moderatecontent.com/moderate/?key=${apikey}&` : "";
-    const ratingApi = env.RATINGAPI ? `${env.RATINGAPI}?` : ModerateContentUrl;
-    if (ratingApi) {
-      let targetUrl = url;
-      if (type === 'telegra') {
-        targetUrl = `https://telegra.ph${url}`;
-      } else if (type === 'tg') {
-        const filePath = await getFile_path(env, url);
-        const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
-        if (filePath && filePath !== 'error') {
-          targetUrl = `https://api.telegram.org/file/bot${tgBotToken}/${filePath}`;
-        } else {
-          targetUrl = `https://api.telegram.org/file/bot${tgBotToken}/${url}`;
-        }
-      }
-      const res = await fetch(`${ratingApi}url=${targetUrl}`);
-      const data = await res.json();
-      return data.hasOwnProperty('rating_index') ? data.rating_index : -1;
-    }
-    return 0;
-  } catch (error) {
-    return -1;
-  }
+  return 1;
 }
 
 // 根据 Telegram 文件 ID，动态调用 Telegram API 换取该文件在 TG 服务端的物理相对路径

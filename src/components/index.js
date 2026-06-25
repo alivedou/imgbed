@@ -13,13 +13,85 @@ import LoginModal from './LoginModal';
 // 1. Footer Component (页脚组件)
 // ==========================================
 export function Footer() {
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+
   return (
-    <footer className="w-full h-full text-center bg-white flex flex-col justify-center items-center">
-      <div>
+    <footer className="w-full h-full text-center bg-white flex flex-col justify-center items-center py-2">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-3">
         <p className="text-[10px] text-zinc-400 font-medium">
           Copyright &copy; 2026 <Link href="https://github.com/alivedou/imgbed" className="text-zinc-600 hover:text-black transition-colors" target="_blank" rel="noopener noreferrer">imgbed</Link> | Powered by adou | Open Source under MIT License
         </p>
+        <span className="hidden sm:inline text-zinc-300 text-[10px]">|</span>
+        <button 
+          onClick={() => setShowDisclaimer(true)}
+          className="text-[10px] font-semibold text-zinc-500 hover:text-red-500 hover:underline cursor-pointer transition-colors"
+        >
+          Disclaimer (免责声明)
+        </button>
       </div>
+
+      {showDisclaimer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden transform transition-all duration-300 scale-100 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 bg-zinc-50">
+              <h3 className="text-xs font-bold text-zinc-800 tracking-wide flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                SITE DISCLAIMER & TERMS
+              </h3>
+              <button 
+                onClick={() => setShowDisclaimer(false)}
+                className="text-zinc-400 hover:text-zinc-600 p-1 rounded-lg hover:bg-zinc-100 transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto text-left space-y-4 text-xs leading-relaxed text-zinc-600">
+              <div className="bg-red-50/50 border border-red-100 rounded-xl p-4 text-red-800 font-medium leading-normal mb-2">
+                This site is a personal, non-commercial technical experiment providing temporary encrypted file transfer.
+              </div>
+              
+              <div className="space-y-3 font-normal">
+                <p className="flex gap-2">
+                  <span className="font-bold text-zinc-800 shrink-0">1.</span>
+                  <span>Uploading or sharing illegal content, infringing content, pornography, violence, malware, etc. is strictly prohibited. Violations will result in immediate data destruction and cooperation with authorities.</span>
+                </p>
+                <p className="flex gap-2">
+                  <span className="font-bold text-zinc-800 shrink-0">2.</span>
+                  <span>This site operates on an auto-deletion model. No guarantees are made regarding data permanence, security, or integrity. Users should back up important data.</span>
+                </p>
+                <p className="flex gap-2">
+                  <span className="font-bold text-zinc-800 shrink-0">3.</span>
+                  <span>All content is provided by uploaders and does not represent the views of this site. The site assumes no liability for disputes or losses arising from use.</span>
+                </p>
+                <p className="flex gap-2">
+                  <span className="font-bold text-zinc-800 shrink-0">4.</span>
+                  <span>The site may suspend or terminate service at any time due to server conditions without prior notice.</span>
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-100 text-center font-semibold text-zinc-800">
+                By using this site, you acknowledge and agree to these terms.
+              </div>
+            </div>
+
+            {/* Footer button */}
+            <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex justify-end">
+              <button 
+                onClick={() => setShowDisclaimer(false)}
+                className="px-5 py-2 text-xs font-bold text-white bg-zinc-900 hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer shadow-sm"
+              >
+                I Understand & Agree
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </footer>
   );
 }
