@@ -102,10 +102,11 @@
 4. 在 **Build settings (构建设置)** 页面中进行如下配置：
    - **Project name (项目名称)**：任意填写（例如 `my-imgbed`）。
    - **Production branch (生产分支)**：选择你的主分支（通常为 `main` 或 `master`）。
-   - **Framework preset (框架预设)**：选择 **`Next.js`**。
-   - **Build command (构建命令)**：填入 `npx @cloudflare/next-on-pages` (或使用项目默认构建命令)。
+   - **Framework preset (框架预设)**：选择 **`None`**（不使用预设，避免 Cloudflare 自动猜测错误），或选择 **`Next.js`**。
+   - **Build command (构建命令)**：填入 **`npx @cloudflare/next-on-pages`**
    - **Build output directory (构建输出目录)**：填入 **`.vercel/output`**。
-5. 展开下方 **"Environment variables (advanced)" (环境变量 - 高级)** 栏目，在此处一次性添加项目所需的配置变量：
+5. 展开下方 **"Environment variables (advanced)" (环境变量 - 高级)** 栏目，在此处一次性添加项目所需的配置变量（**极其重要，防止编译失败**）：
+   - **`NODE_VERSION`**：**`18.17.0`** 或 **`20`**（**必须添加！** Cloudflare 默认的低版本 Node 编译 Next.js 会静默失败并报错 `.vercel/output not found`）。
    - **`ADMIN_PASS`**：设置你的管理员后台登录密码（用于 `/login`）。
    - **`NEXTAUTH_SECRET`**：一串随机长字符串，用于登录 Session 加密（可随意输入 32 位以上字母数字组合）。
    - **`TG_BOT_TOKEN`**（可选）：你的 Telegram 机器人 Token。
@@ -142,6 +143,12 @@
 ---
 
 ### 🎉 部署成功与常见故障排查
+* **构建时报错 `Error: Output directory ".vercel/output" not found`？**
+  1. **最主要原因：没有设置 `NODE_VERSION` 环境变量**。Cloudflare Pages 默认构建环境的 Node 版本较低（如 Node 12/16），无法编译 Next.js 14。请在项目的 **Settings (设置) -> Environment variables (环境变量)** 中，添加 `NODE_VERSION` 值为 `18.17.0` 或 `20`，然后重新触发部署。
+  2. 确认 **Build command** 确实是 `npx @cloudflare/next-on-pages`，且 **Build output directory** 是 `.vercel/output`。
+* **部署日志里有大量的 `npm warn deprecated ...` 警告？**
+  * **风险等级**：**无风险 / 极其安全**。
+  * **原因与影响**：这些警告（例如 `sourcemap-codec`, `inflight` 等提示弃用）是 npm 包管理工具的标准提示，因为三方依赖项或 ESLint 的深层子依赖使用了较旧的包。它们是**非阻塞的**，不会对编译、部署或线上运行产生任何负面影响，直接忽略即可。
 * **访问后台 `/admin` 或 `/list` 提示密码错误？**
   确保你在 Pages 的环境变量中正确配置了 `ADMIN_PASS`，并且修改后必须重新部署（Redeploy）一次应用使环境变量载入。
 * **上传媒体文件失败，一直显示 Loading 或报错？**

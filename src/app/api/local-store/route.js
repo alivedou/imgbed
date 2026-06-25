@@ -1,12 +1,23 @@
-import fs from 'fs';
-import path from 'path';
-
-export const runtime = 'nodejs';
+export const runtime = 'edge';
 
 export async function POST(request) {
   try {
     const body = await request.json();
     const { action } = body;
+
+    // 动态并隐式加载 node.js 原生模块，防止 webpack 静态解析在 Edge 环境下报错
+    let fs, path;
+    try {
+      const fsModuleName = 'fs';
+      const pathModuleName = 'path';
+      fs = await import(fsModuleName);
+      path = await import(pathModuleName);
+    } catch (err) {
+      return Response.json({
+        success: false,
+        error: 'Local-store utility is only available in local Node.js environment.'
+      }, { status: 400 });
+    }
 
     const d1Path = path.join(process.cwd(), '.local_d1.json');
     const r2Dir = path.join(process.cwd(), '.local_r2');
