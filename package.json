@@ -11,7 +11,7 @@
     "d1:deploy": "wrangler d1 execute <DATABASE_NAME_OR_BINDING> --remote --file=./tgimglog.sql"
   },
   "dependencies": {
-    "@cloudflare/next-on-pages": "^1.13.7",
+    "@cloudflare/next-on-pages": "1.12.1",
     "@fortawesome/fontawesome-svg-core": "^6.6.0",
     "@fortawesome/free-brands-svg-icons": "^6.6.0",
     "@fortawesome/free-regular-svg-icons": "^6.6.0",
