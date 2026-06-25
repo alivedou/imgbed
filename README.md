@@ -149,6 +149,11 @@
 * **部署日志里有大量的 `npm warn deprecated ...` 警告？**
   * **风险等级**：**无风险 / 极其安全**。
   * **原因与影响**：这些警告（例如 `sourcemap-codec`, `inflight` 等提示弃用）是 npm 包管理工具的标准提示，因为三方依赖项或 ESLint 的深层子依赖使用了较旧的包。它们是**非阻塞的**，不会对编译、部署或线上运行产生任何负面影响，直接忽略即可。
+* **构建时报错 `npm error code EUSAGE ... npm ci can only install packages when your package.json and package-lock.json are in sync`？**
+  * **原因**：这是因为我们在 AI Studio 中升级了 `package.json` 中的多项高版本依赖。在 AI Studio 环境中 `package-lock.json` 已经由包管理工具自动更新同步好了，但当您拉取代码到本地或推送至 GitHub 时，**可能只推送了 `package.json` 而漏掉了 `package-lock.json`**，导致 Cloudflare Pages 运行 `npm ci` 校验版本不一致而报错。
+  * **解决方案**：
+    1. **最推荐的做法**：确保您在同步或导出代码到您的 GitHub 仓库时，**将 `package.json` 和 `package-lock.json` 两个文件一并提交（commit）并推送（push）**。
+    2. **备用临时方案**：在 Cloudflare Pages 的项目后台 **Settings (设置) -> Environment variables (环境变量)** 中，添加环境变量 **`NPM_FLAGS`**，其值设为 **`--legacy-peer-deps`**，或者设置环境变量 **`NPM_CONFIG_LEGACY_PEER_DEPS=true`**，可以跳过部分过于严苛的对等依赖校验。
 * **访问后台 `/admin` 或 `/list` 提示密码错误？**
   确保你在 Pages 的环境变量中正确配置了 `ADMIN_PASS`，并且修改后必须重新部署（Redeploy）一次应用使环境变量载入。
 * **上传媒体文件失败，一直显示 Loading 或报错？**
