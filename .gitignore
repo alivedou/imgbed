@@ -1,0 +1,64 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Testing
+/coverage
+
+# Next.js build outputs
+/.next/
+/out/
+/build
+
+# Vercel & Netlify
+.vercel
+.netlify
+
+# Cloudflare Wrangler
+/.wrangler/
+.wrangler/
+.wrangler
+
+# Local development files & DB cache
+.local_d1.json
+.local_d1/
+
+# API keys and secret environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS metadata & temporary files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.pem
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Project-specific temp scripts / leftovers
+old.js
+1.js
+test*
+wrangler.toml
+git.sh
+app/deva
+src/app/deva/*

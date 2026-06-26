@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 255, 255, 255;
+    --foreground: 0, 0, 0;
+    --border: 234, 234, 234;
+    --accent: 0, 112, 243;
+  }
+
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--foreground));
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Vercel Style Toast Overrides */
+:root {
+  --toastify-color-light: #fff;
+  --toastify-color-dark: #000;
+  --toastify-color-info: #0070f3;
+  --toastify-color-success: #000;
+  --toastify-color-warning: #f5a623;
+  --toastify-color-error: #ee0000;
+  --toastify-toast-width: 320px;
+  --toastify-toast-background: #fff;
+  --toastify-toast-min-height: 56px;
+  --toastify-toast-max-height: 800px;
+  --toastify-font-family: inherit;
+  --toastify-z-index: 9999;
+  --toastify-text-color-light: #000;
+}
+
+.Toastify__toast-container--bottom-right {
+  bottom: 60px !important; /* Avoid footer */
+  right: 20px !important;
+}
+
+.Toastify__toast {
+  border-radius: 8px !important;
+  border: 1px solid #eaeaea !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+  padding: 12px 16px !important;
+  min-height: 50px !important;
+  animation-duration: 0.2s !important; /* Faster snappy animations */
+}
+
+.Toastify__toast-theme--light {
+  background: white !important;
+}
+
+.Toastify__toast--success {
+  border-color: #000 !important;
+}
+
+.Toastify__toast-body {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #000 !important;
+}
+
+.Toastify__progress-bar {
+  height: 2px !important;
+}
+
+.Toastify__progress-bar--success {
+  background: #000 !important;
+}
+
+.Toastify__close-button {
+  color: #a1a1aa !important;
+  opacity: 1 !important;
+}
+
+.Toastify__close-button:hover {
+  color: #000 !important;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #fafafa;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #eaeaea;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #d1d1d1;
+}
