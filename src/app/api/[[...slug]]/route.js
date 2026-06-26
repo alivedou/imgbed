@@ -1,4 +1,3 @@
-export const runtime = 'edge';
 import { getSafeRequestContext } from '@/lib/cloudflare';
 import { auth } from '@/auth';
 
