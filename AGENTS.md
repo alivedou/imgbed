@@ -22,7 +22,7 @@ You MUST respect the 3 identities defined and enforced in `/src/middleware.js`. 
 - **Import Statements**: Always use named imports at the top-level. 
 - **Icons**: Use exclusively Lucide Icons (`lucide-react`). Do not add manual SVG designs.
 - **State Preservation**: Ensure standard client-side reactivity and secure serverside caching where possible.
-- **Edge Runtime Declarations**: Ensure API files in `src/app/api/...` maintain the correct `export const runtime = 'edge';` declaration, and NextAuth endpoints also maintain it to prevent runtime compilation discrepancies.
+- **Edge Runtime Declarations**: Historically required on API pages, but REMOVED project‑wide in v2 to support `@opennextjs/cloudflare@0.3.1` (OpenNext v3.3.0), which does not support `runtime = 'edge'` in page or route files. The `converter: "edge"` override in `open-next.config.ts` now handles edge‑compatible output for all functions. If `@opennextjs/cloudflare` is upgraded to a version that supports it, this rule may be reinstated.
 - **No Technology Larping**: Do not add telemetry UI panels, visual port logs (like displaying PORT: 3000), ping monitors, or online indicators unless specifically requested.
 
 Always follow the structural conventions specified in `/docs/architecture.md`.
