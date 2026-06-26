@@ -25,6 +25,22 @@ export default function LoginModal({ isOpen, onClose, onSuccess, isPage = false 
 
     setLoading(true);
     try {
+      // 1. 检查是否已被临时锁定
+      try {
+        const checkRes = await fetch(`/api/auth/check-lockout?username=${encodeURIComponent(username)}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.locked) {
+            const minutes = Math.ceil(checkData.remainingSeconds / 60);
+            toast.error(`Too many failed login attempts. This account or your IP is temporarily locked. Please try again after ${minutes} minutes.`);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking lockout status:', err);
+      }
+
       // 调用 NextAuth.js 的 signIn 方法，使用 credentials 凭证体系
       const result = await signIn('credentials', {
         redirect: false,
@@ -33,6 +49,23 @@ export default function LoginModal({ isOpen, onClose, onSuccess, isPage = false 
       });
       if (result?.error) {
         console.error(result.error);
+        
+        // 再次检查是否是因为被锁定导致的失败，或者密码错误触发了新的锁定
+        try {
+          const checkRes = await fetch(`/api/auth/check-lockout?username=${encodeURIComponent(username)}`);
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.locked) {
+              const minutes = Math.ceil(checkData.remainingSeconds / 60);
+              toast.error(`Too many failed login attempts. This account or your IP has been locked. Please try again after ${minutes} minutes.`);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('Error checking lockout status after failure:', e);
+        }
+
         toast.error("Incorrect username or password. Please check and try again.");
       } else {
         toast.success('Login successful!');

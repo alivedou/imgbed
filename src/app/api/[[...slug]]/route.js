@@ -354,7 +354,12 @@ export async function GET(request, { params }) {
     }
 
     const cacheKey = new Request(req_url.toString(), request);
-    const cache = (typeof caches !== 'undefined' && caches) ? caches.default : null;
+    let cache = null;
+    try {
+      if (typeof caches !== 'undefined' && caches) {
+        cache = caches.default || null;
+      }
+    } catch (_) {}
 
     try {
       const dbRating = await getRatingFromDB(env.IMG, `/rfile/${name}`);
@@ -443,7 +448,12 @@ export async function GET(request, { params }) {
     }
 
     const cacheKey = new Request(req_url.toString(), request);
-    const cache = (typeof caches !== 'undefined' && caches) ? caches.default : null;
+    let cache = null;
+    try {
+      if (typeof caches !== 'undefined' && caches) {
+        cache = caches.default || null;
+      }
+    } catch (_) {}
 
     try {
       const dbRating = await getRatingFromDB(env.IMG, `/cfile/${name}`);

@@ -1,5 +1,7 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { headers } from "next/headers";
+import { getLockoutStatus, recordFailedAttempt, resetAttempts } from "./lib/lockout";
 
 // 导出 NextAuth 的各种处理器及方法
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -14,6 +16,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // 清理并去除输入凭据中的首尾空白字符，以防空格或换行等引发问题
         const submittedUsername = (credentials?.username || '').trim();
         const submittedPassword = (credentials?.password || '').trim();
+
+        let clientIp = 'unknown';
+        try {
+          const headersList = headers();
+          const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || '';
+          clientIp = ip ? ip.split(',')[0].trim() : 'unknown';
+        } catch (e) {
+          console.log('[Auth] Failed to get IP from headers:', e);
+        }
+
+        // 1. 检查是否已被临时锁定
+        const lockout = await getLockoutStatus(submittedUsername, clientIp);
+        if (lockout.locked) {
+          console.log(`[Auth Block] Blocked attempt for user: ${submittedUsername}, IP: ${clientIp}. Remaining: ${lockout.remainingSeconds}s`);
+          throw new Error(`LockedOut:${lockout.remainingSeconds}`);
+        }
 
         // 将管理员和普通用户名称固定，不再从环境变量中动态改写
         const fixedAdminUser = 'admin';
@@ -35,6 +53,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // 验证管理员身份
         if (submittedUsername === fixedAdminUser && submittedPassword === envAdminPass) {
+          await resetAttempts(submittedUsername, clientIp);
           const user = {
             id: '1',
             name: fixedAdminUser,
@@ -47,6 +66,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // 验证普通用户
         if (submittedUsername === fixedRegularUser && submittedPassword === envRegularPass) {
+          await resetAttempts(submittedUsername, clientIp);
           const user = {
             id: '2',
             name: fixedRegularUser,
@@ -57,6 +77,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return user;
         } else {
           console.log('[Auth Debug] Auth credentials did not match any users');
+          await recordFailedAttempt(submittedUsername, clientIp);
           return null;
         }
       }
