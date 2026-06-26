@@ -103,11 +103,11 @@
    - **Project name (项目名称)**：任意填写（例如 `my-imgbed`）。
    - **Production branch (生产分支)**：选择你的主分支（通常为 `main` 或 `master`）。
    - **Framework preset (框架预设)**：选择 **`None`**（不使用预设，避免 Cloudflare 自动猜测错误），或选择 **`Next.js`**。
-   - **Build command (构建命令)**：填入 **`npx @opennextjs/cloudflare build`**
+   - **Build command (构建命令)**：填入 **`npx @opennextjs/cloudflare`**
    - **Build output directory (构建输出目录)**：填入 **`.open-next`**。
 5. 展开下方 **"Environment variables (advanced)" (环境变量 - 高级)** 栏目，在此处一次性添加项目所需的配置变量（**极其重要，防止编译失败**）：
    - **`NODE_VERSION`**：**无需配置**（项目已配置 `.node-version`、`.nvmrc` 和 `package.json`，Cloudflare Pages 将自动采用 Node.js 22 稳定版编译）。
-   - **`ADMIN_PASS`**：设置你的管理员后台登录密码（用于 `/login`）。
+   - **`ADMIN_PASS`**：设置你的管理员后台登录密码（用于 `/login`；管理员用户名固定为 `admin`）。
    - **`NEXTAUTH_SECRET`**：一串随机长字符串，用于登录 Session 加密（可随意输入 32 位以上字母数字组合）。
    - **`TG_BOT_TOKEN`**（可选）：你的 Telegram 机器人 Token。
 6. 点击 **"Save and Deploy" (保存并部署)**。由于此时还没进行 D1 绑定，首次构建可能会提示警告或部署完成后访问会报 500 错误，这很正常。请继续进行第四步。

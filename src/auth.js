@@ -38,8 +38,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const fixedRegularUser = 'user';
 
         // 密码仍旧优先从环境变量加载，默认回退密码保持相同
-        const envAdminPass = (process.env.BASIC_PASS || '').trim() || 'admin';
-        const envRegularPass = (process.env.REGULAR_PASS || '').trim() || 'user';
+        const envAdminPass = (process.env.ADMIN_PASS || '').trim() || 'admin';
+        const envRegularPass = (process.env.BASIC_PASS || '').trim() || 'user';
 
         // 调试日志输出当前登录尝试的安全性校验细节
         console.log('[Auth Debug] Attempting login:', {
