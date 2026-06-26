@@ -1,4 +1,4 @@
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 // 巧妙使用内存作为基础，并在 Node 环境可读写时自动支持本地 JSON 文件持久化
 // 如果全局对象上没有 __d1Store，则初始化一个空的存储结构，包含图片信息 (imginfo) 与 tg图片日志 (tgimglog)
@@ -635,7 +635,7 @@ class LocalR2Bucket {
 // 获取安全的环境上下文变量 binding 拦截挂载代理
 export function getSafeRequestContext() {
   try {
-    const context = getRequestContext();
+    const context = getCloudflareContext();
     if (context && context.env) {
       const activeEnv = { ...context.env };
       if (!activeEnv.IMG) {

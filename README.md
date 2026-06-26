@@ -103,8 +103,8 @@
    - **Project name (项目名称)**：任意填写（例如 `my-imgbed`）。
    - **Production branch (生产分支)**：选择你的主分支（通常为 `main` 或 `master`）。
    - **Framework preset (框架预设)**：选择 **`None`**（不使用预设，避免 Cloudflare 自动猜测错误），或选择 **`Next.js`**。
-   - **Build command (构建命令)**：填入 **`npx @cloudflare/next-on-pages`**
-   - **Build output directory (构建输出目录)**：填入 **`.vercel/output`**。
+   - **Build command (构建命令)**：填入 **`npx @opennextjs/cloudflare build`**
+   - **Build output directory (构建输出目录)**：填入 **`.open-next`**。
 5. 展开下方 **"Environment variables (advanced)" (环境变量 - 高级)** 栏目，在此处一次性添加项目所需的配置变量（**极其重要，防止编译失败**）：
    - **`NODE_VERSION`**：**无需配置**（项目已配置 `.node-version`、`.nvmrc` 和 `package.json`，Cloudflare Pages 将自动采用 Node.js 22 稳定版编译）。
    - **`ADMIN_PASS`**：设置你的管理员后台登录密码（用于 `/login`）。
@@ -145,7 +145,7 @@
 ### 🎉 部署成功与常见故障排查
 * **构建时报错 `Error: Output directory ".vercel/output" not found`？**
   1. **最主要原因：没有在环境中声明现代 Node.js 版本**。Cloudflare Pages 默认构建环境的 Node 版本较低（如 Node 12/16），无法编译 Next.js 14。虽然我们已经在项目中配置了 `.node-version`、`.nvmrc` 和 `package.json` 中的 `engines` 字段（均指向 **Node 22**），部分旧的部署流如未自动读取，建议在项目的 **Settings (设置) -> Environment variables (环境变量)** 中手动添加 `NODE_VERSION` 值为 `22` 或 `24`，然后重新触发部署。
-  2. 确认 **Build command** 确实是 `npx @cloudflare/next-on-pages`，且 **Build output directory** 是 `.vercel/output`。
+  2. 确认 **Build command** 确实是 `npx @opennextjs/cloudflare build`，且 **Build output directory** 是 `.open-next`。
 * **部署日志里有大量的 `npm warn deprecated ...` 警告？**
   * **风险等级**：**无风险 / 极其安全**。
   * **原因与影响**：这些警告（例如 `sourcemap-codec`, `inflight` 等提示弃用）是 npm 包管理工具的标准提示，因为三方依赖项或 ESLint 的深层子依赖使用了较旧的包。它们是**非阻塞的**，不会对编译、部署或线上运行产生任何负面影响，直接忽略即可。
