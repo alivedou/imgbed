@@ -103,7 +103,7 @@
    - **Project name (项目名称)**：任意填写（例如 `my-imgbed`）。
    - **Production branch (生产分支)**：选择你的主分支（通常为 `main` 或 `master`）。
    - **Framework preset (框架预设)**：选择 **`None`**（不使用预设，避免 Cloudflare 自动猜测错误），或选择 **`Next.js`**。
-   - **Build command (构建命令)**：填入 **`npx @opennextjs/cloudflare && mv .open-next/worker.js .open-next/_worker.js`**
+   - **Build command (构建命令)**：填入 **`npx @opennextjs/cloudflare && mv .open-next/worker.js .open-next/_worker.js && cp _routes.json .open-next/_routes.json`**
    - **Build output directory (构建输出目录)**：填入 **`.open-next`**。
 5. 展开下方 **"Environment variables (advanced)" (环境变量 - 高级)** 栏目，在此处一次性添加项目所需的配置变量（**极其重要，防止编译失败**）：
    - **`NODE_VERSION`**：**无需配置**（项目已配置 `.node-version`、`.nvmrc` 和 `package.json`，Cloudflare Pages 将自动采用 Node.js 22 稳定版编译）。
