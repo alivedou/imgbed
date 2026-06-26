@@ -634,35 +634,37 @@ class LocalR2Bucket {
 
 // 获取安全的环境上下文变量 binding 拦截挂载代理
 export function getSafeRequestContext() {
-  try {
-    const context = getCloudflareContext();
-    if (context && context.env) {
-      const activeEnv = { ...context.env };
-      if (!activeEnv.IMG) {
-        try {
-          activeEnv.IMG = new LocalD1Database();
-        } catch (_) {}
-      }
-      if (!activeEnv.IMGRS) {
-        try {
-          activeEnv.IMGRS = new LocalR2Bucket();
-        } catch (_) {}
-      }
-      const envProxy = new Proxy(activeEnv, {
-        get(target, prop) {
-          if (prop in target) {
-            return target[prop];
-          }
-          return process.env[prop];
+  if (process.env.CF_PAGES === '1') {
+    try {
+      const context = getCloudflareContext();
+      if (context && context.env) {
+        const activeEnv = { ...context.env };
+        if (!activeEnv.IMG) {
+          try {
+            activeEnv.IMG = new LocalD1Database();
+          } catch (_) {}
         }
-      });
-      return {
-        ...context,
-        env: envProxy
-      };
+        if (!activeEnv.IMGRS) {
+          try {
+            activeEnv.IMGRS = new LocalR2Bucket();
+          } catch (_) {}
+        }
+        const envProxy = new Proxy(activeEnv, {
+          get(target, prop) {
+            if (prop in target) {
+              return target[prop];
+            }
+            return process.env[prop];
+          }
+        });
+        return {
+          ...context,
+          env: envProxy
+        };
+      }
+    } catch (e) {
+      console.warn('[Cloudflare Context] Error retrieving context on Cloudflare Pages:', e);
     }
-  } catch (e) {
-    // 优雅捕捉潜在的边界异常
   }
 
   // 本地沙盒环境兼容降级与代理挂载
