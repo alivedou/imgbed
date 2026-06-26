@@ -58,7 +58,7 @@ next-env.d.ts
 old.js
 1.js
 test*
-wrangler.toml
+# wrangler.toml — 已允许提交，仅含兼容性配置，无密钥
 git.sh
 app/deva
 src/app/deva/*
