@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS tgimglog (
     `url` text,
     `referer` text,
 	`ip` varchar(255),
-	`time` DATE
+	`time` TEXT
 );
 DROP TABLE IF EXISTS imginfo;
 CREATE TABLE IF NOT EXISTS imginfo (
@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS imginfo (
 	`ip` varchar(255),
 	`rating` integer,
 	`total` integer,
-	`time` DATE
+	`time` TEXT
+);
+
+CREATE TABLE IF NOT EXISTS system_config (
+	`key` TEXT PRIMARY KEY NOT NULL,
+	`value` TEXT
 );
 

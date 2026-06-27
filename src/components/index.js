@@ -353,14 +353,14 @@ const updateRating = async (initName, rating) => {
 
 export function Switcher({ initialChecked, initName }) {
   const [isChecked, setIsChecked] = useState(initialChecked === 3);
-  const isDisabled = initName.startsWith('/file') || initName.startsWith('/cfile') || initName.startsWith('/rfile');
+  const isTrackedPath = initName.startsWith('/file') || initName.startsWith('/cfile') || initName.startsWith('/rfile');
 
   useEffect(() => {
     setIsChecked(initialChecked === 3);
   }, [initialChecked]);
 
   const handleCheckboxChange = async () => {
-    if (!isDisabled) return;
+    if (!isTrackedPath) return;
 
     const newRating = isChecked ? 1 : 3;
     await updateRating(initName, newRating);
@@ -375,7 +375,7 @@ export function Switcher({ initialChecked, initName }) {
         className="sr-only"
         checked={isChecked}
         onChange={handleCheckboxChange}
-        disabled={!isDisabled}
+        disabled={!isTrackedPath}
       />
       <span
         className={`slider mr-2 flex h-[20px] w-[36px] items-center rounded-full p-0.5 duration-200 transition-colors ${isChecked ? 'bg-black' : 'bg-zinc-200'}`}

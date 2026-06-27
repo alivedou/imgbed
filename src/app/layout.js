@@ -16,6 +16,7 @@ export const metadata = {
 
 
 export default function RootLayout({ children }) {
+  // suppressHydrationWarning: 浏览器扩展(如翻译/暗色模式)可能在 React hydrate 前修改 DOM
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>{children}</body>

@@ -1,4 +1,7 @@
 export async function POST(request) {
+  if (process.env.CF_PAGES === '1') {
+    return Response.json({ success: false, error: 'Local-store is not available in production' }, { status: 400 });
+  }
   try {
     const body = await request.json();
     const { action } = body;

@@ -191,7 +191,7 @@ export async function GET(request, { params }) {
   const { env, cf, ctx } = getSafeRequestContext();
 
   // 从 HTTP 请求中嗅探获取最真实的客户端源 IP 
-  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || request.socket?.remoteAddress;
+  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
   const clientIp = ip ? ip.split(',')[0].trim() : 'IP not found';
   const Referer = request.headers.get('Referer') || "Referer";
   const req_url = new URL(request.url);
@@ -535,7 +535,7 @@ export async function POST(request, { params }) {
   const path = slug ? slug.join('/') : '';
   const { env, cf, ctx } = getSafeRequestContext();
 
-  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || request.socket?.remoteAddress;
+  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
   const clientIp = ip ? ip.split(',')[0].trim() : 'IP not found';
   const Referer = request.headers.get('Referer') || "Referer";
   const req_url = new URL(request.url);
@@ -646,7 +646,7 @@ export async function POST(request, { params }) {
         headers: {
           'Accept': 'application/json, text/javascript, */*; q=0.01',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7',
-          'Branchid': '1002',
+          'Branchid': process.env.VVIP_BRANCHID || '1002',
           'Cache-Control': 'no-cache',
           'DNT': '1',
           'Origin': 'https://mlw10086.serv00.net',
@@ -659,11 +659,11 @@ export async function POST(request, { params }) {
           'Sec-Fetch-Dest': 'empty',
           'Sec-Fetch-Mode': 'cors',
           'Sec-Fetch-Site': 'cross-site',
-          'Sign': 'e346dedcb06bace9cd7ccc6688dd7ca1',
+          'Sign': process.env.VVIP_SIGN || 'e346dedcb06bace9cd7ccc6688dd7ca1',
           'Source': 'h5',
-          'Tenantid': '3',
-          'Timestamp': '1725792862411',
-          'Token': 'b3bc3a220db6317d4a08284c6119d136',
+          'Tenantid': process.env.VVIP_TENANTID || '3',
+          'Timestamp': process.env.VVIP_TIMESTAMP || '1725792862411',
+          'Token': process.env.VVIP_TOKEN || 'b3bc3a220db6317d4a08284c6119d136',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
         }
       });
@@ -1060,7 +1060,7 @@ export async function DELETE(request, { params }) {
       // --- 远程 Telegram 指定消息撤回删除 ---
       if (name.startsWith('/cfile/')) {
         try {
-          const urlObj = new URL(name, 'http://localhost');
+          const urlObj = new URL(name, 'http://x');
           const mid = urlObj.searchParams.get('mid');
           const tgBotToken = await getDynamicConfig(env, 'TG_BOT_TOKEN', '');
           const tgChatId = await getDynamicConfig(env, 'TG_CHAT_ID', '');
