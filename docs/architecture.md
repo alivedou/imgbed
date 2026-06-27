@@ -6,11 +6,10 @@
 
 ## 1. 目录结构与职责边界 (Directory Roles)
 
-项目基于 Next.js 15+ (App Router) 配合 Cloudflare Edge Runtime 架构构建，所有关键业务分层如下：
+项目基于 Next.js 14.2.x (App Router) 配合 Cloudflare Pages 架构构建，所有关键业务分层如下：
 
 ```
 ├── docs/                      # 核心规范与多语言管理文档
-│   ├── manage.md              # 面向运营的管理及环境配置指南
 │   └── architecture.md        # [本文件] 整体架构、代码约定与角色权限矩阵
 ├── src/
 │   ├── app/                   # App Router 路由主域
@@ -80,4 +79,4 @@
 
 ### E. 文档协同规则
 * 对环境配置文件的修改，必须在同步更新 `.env.example`，严禁上传真实私钥。
-* 遇有大规模业务升级，需更新并记录到 `/docs/manage.md`。
+* 遇有大规模业务升级，需更新并记录到 `list.md`。
