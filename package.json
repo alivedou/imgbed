@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "cf-build": "npx @opennextjs/cloudflare && mv .open-next/worker.js .open-next/_worker.js && cp -r .open-next/assets/_next .open-next/_next && cp _routes.json .open-next/_routes.json",
     "d1": "wrangler d1 execute img --local --file=./tgimglog.sql",
     "d1:deploy": "wrangler d1 execute <DATABASE_NAME_OR_BINDING> --remote --file=./tgimglog.sql"
   },
@@ -21,7 +22,6 @@
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@next/third-parties": "14.2.29",
     "@opennextjs/cloudflare": "0.3.1",
-    "lucide-react": "^0.469.0",
     "next": "14.2.29",
     "next-auth": "^5.0.0-beta.19",
     "react": "^18.3.1",

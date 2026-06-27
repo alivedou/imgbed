@@ -73,6 +73,11 @@
 * 对 D1 数据库、R2 存储及 Telegram 等外部服务的请求，必须用完整的 `try-catch` 结构进行捕获。
 * 在任何操作 D1/R2 的地方，优先重用 `/src/lib/cloudflare.js` 中的标准实例，绝对不允许在各子 API 里私自多次构建配置复杂的、碎片化的存储/数据库链接对象。
 
+### D2. 本地 D1/R2 Mock 说明
+* `/src/lib/cloudflare.js` 中的 `LocalD1Database` 和 `LocalR2Bucket` 仅用于本地开发环境（`process.versions?.node` 为 true）。
+* 生产环境（Cloudflare Pages）会通过 `getCloudflareContext()` 获取真实的 D1 (`env.IMG`) 和 R2 (`env.IMGRS`) 绑定。
+* 本地 mock 使用 in-memory + `.local_d1.json` / `.local_r2/` 文件持久化，不支持完整 SQL 语法。
+
 ### E. 文档协同规则
 * 对环境配置文件的修改，必须在同步更新 `.env.example`，严禁上传真实私钥。
 * 遇有大规模业务升级，需更新并记录到 `/docs/manage.md`。

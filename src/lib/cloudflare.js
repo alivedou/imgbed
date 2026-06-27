@@ -12,9 +12,11 @@ class LocalD1Database {
     let fsModule = null;
     let pathModule = null;
     try {
-      // 通过 eval('require') 绕过 Webpack/Vite 静态分析，防止在 Edge Runtime 或前端浏览器运行时因加载 node 原生模块而报错进不去
-      fsModule = eval("require('fs')");
-      pathModule = eval("require('path')");
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        const req = eval('require'); // patched by OpenNext for Cloudflare; Node.js local dev only
+        fsModule = req('fs');
+        pathModule = req('path');
+      }
     } catch (_) {}
 
     this.fs = fsModule;
@@ -399,8 +401,11 @@ class LocalR2Bucket {
     let fsModule = null;
     let pathModule = null;
     try {
-      fsModule = eval("require('fs')");
-      pathModule = eval("require('path')");
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        const req = eval('require'); // patched by OpenNext for Cloudflare; Node.js local dev only
+        fsModule = req('fs');
+        pathModule = req('path');
+      }
     } catch (_) {}
 
     this.fs = fsModule;
