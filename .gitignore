@@ -62,3 +62,12 @@ test*
 git.sh
 app/deva
 src/app/deva/*
+
+# OpenNext build output
+.open-next/
+
+# Local R2 mock storage
+.local_r2/
+
+# Deployment debug logs
+*.log
