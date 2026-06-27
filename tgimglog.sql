@@ -22,3 +22,10 @@ CREATE TABLE IF NOT EXISTS system_config (
 	`value` TEXT
 );
 
+CREATE TABLE IF NOT EXISTS failed_attempts (
+	`identifier` TEXT PRIMARY KEY NOT NULL,
+	`count` integer DEFAULT 1,
+	`first_failed_at` TEXT,
+	`locked_until` TEXT
+);
+

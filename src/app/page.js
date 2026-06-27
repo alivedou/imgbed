@@ -55,7 +55,7 @@ export default function Home() {
     getTotal();
     isAuth();
     // 自动轻量化轮询：秒级同步图床总量计数，防止因跨标签管理物理删除产生显示失衡
-    const totalInterval = setInterval(getTotal, 10000);
+    const totalInterval = setInterval(getTotal, 60000);
     return () => {
       clearInterval(totalInterval);
     };

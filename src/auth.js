@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { headers } from "next/headers";
 import { getLockoutStatus, recordFailedAttempt, resetAttempts } from "./lib/lockout";
-
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 // 导出 NextAuth 的各种处理器及方法
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -27,7 +27,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         // 1. 检查是否已被临时锁定
-        const lockout = await getLockoutStatus(submittedUsername, clientIp);
+        let db = null;
+        try {
+          const ctx = getCloudflareContext();
+          db = ctx?.env?.IMG;
+        } catch (_) {}
+        const lockout = await getLockoutStatus(submittedUsername, clientIp, db);
         if (lockout.locked) {
           console.log(`[Auth Block] Blocked attempt for user: ${submittedUsername}, IP: ${clientIp}. Remaining: ${lockout.remainingSeconds}s`);
           throw new Error(`LockedOut:${lockout.remainingSeconds}`);
@@ -53,7 +58,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // 验证管理员身份
         if (submittedUsername === fixedAdminUser && submittedPassword === envAdminPass) {
-          await resetAttempts(submittedUsername, clientIp);
+          await resetAttempts(submittedUsername, clientIp, db);
           const user = {
             id: '1',
             name: fixedAdminUser,
@@ -66,7 +71,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // 验证普通用户
         if (submittedUsername === fixedRegularUser && submittedPassword === envRegularPass) {
-          await resetAttempts(submittedUsername, clientIp);
+          await resetAttempts(submittedUsername, clientIp, db);
           const user = {
             id: '2',
             name: fixedRegularUser,
@@ -77,7 +82,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return user;
         } else {
           console.log('[Auth Debug] Auth credentials did not match any users');
-          await recordFailedAttempt(submittedUsername, clientIp);
+          await recordFailedAttempt(submittedUsername, clientIp, db);
           return null;
         }
       }

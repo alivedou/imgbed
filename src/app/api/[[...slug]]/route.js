@@ -52,16 +52,14 @@ async function get_nowTime() {
 // 在本地数据库 imginfo 表中插入全新的图片记录（例如初始访问频次为1，保存上传者IP等）
 async function insertImageData(env, src, referer, ip, rating, time) {
   try {
-    const existing = await env.prepare(`SELECT * FROM imginfo WHERE url='${src}'`).first();
+    const existing = await env.prepare('SELECT * FROM imginfo WHERE url = ?').bind(src).first();
     if (existing) {
-      await env.prepare(`UPDATE imginfo SET total = total + 1 WHERE url='${src}'`).run();
+      await env.prepare('UPDATE imginfo SET total = total + 1 WHERE url = ?').bind(src).run();
       return;
     }
     await env.prepare(
-      `INSERT INTO imginfo (url, referer, ip, rating, total, time)
-       VALUES ('${src}', '${referer}', '${ip}', ${rating}, 1, '${time}')`
-    ).run();
-    // 自动为新插入的图片追加一条属于此刻的初始访问或上传行为日志，从而使内连接 JOIN 查询时刻立即能够在高安全性后台完整显示该图
+      'INSERT INTO imginfo (url, referer, ip, rating, total, time) VALUES (?, ?, ?, ?, 1, ?)'
+    ).bind(src, referer, ip, rating, time).run();
     try {
       await insertTgImgLog(env, src, referer, ip, time);
     } catch (logErr) {
@@ -86,7 +84,7 @@ async function insertTgImgLog(DB, url, referer, ip, time) {
 // 从数据库中单条提取已经存在的图片等级判定结果
 async function getRatingFromDB(DB, url) {
   try {
-    const ps = DB.prepare(`SELECT rating FROM imginfo WHERE url='${url}'`);
+    const ps = DB.prepare('SELECT rating FROM imginfo WHERE url = ?').bind(url);
     const result = await ps.first();
     return result;
   } catch (error) {
@@ -152,7 +150,7 @@ export async function getDynamicConfig(env, key, defaultVal = 'false') {
   try {
     if (env.IMG) {
       await env.IMG.prepare(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`).run();
-      const row = await env.IMG.prepare(`SELECT value FROM system_config WHERE key = '${key}'`).first();
+      const row = await env.IMG.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
       if (row && row.value !== undefined) {
         return row.value;
       }
@@ -166,7 +164,7 @@ export async function setDynamicConfig(env, key, value) {
   try {
     if (env.IMG) {
       await env.IMG.prepare(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`).run();
-      await env.IMG.prepare(`INSERT INTO system_config (key, value) VALUES ('${key}', '${value}') ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run();
+      await env.IMG.prepare('INSERT INTO system_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, value).run();
       return true;
     }
   } catch (e) {}
@@ -177,8 +175,9 @@ export async function setDynamicConfig(env, key, value) {
 async function logRequest(env, path, name, referer, ip) {
   try {
     const nowTime = await get_nowTime();
-    await insertTgImgLog(env.IMG, `${path}/${name}`, referer, ip, nowTime);
-    await env.IMG.prepare(`UPDATE imginfo SET total = total +1 WHERE url = '${path}/${name}';`).run();
+    const urlPath = `${path}/${name}`;
+    await insertTgImgLog(env.IMG, urlPath, referer, ip, nowTime);
+    await env.IMG.prepare('UPDATE imginfo SET total = total + 1 WHERE url = ?').bind(urlPath).run();
   } catch (error) {
     console.error('Error logging request:', error);
   }
@@ -299,7 +298,7 @@ export async function GET(request, { params }) {
         const ratingResult = await getRatingFromDB(env.IMG, `/file/${name}`);
         if (ratingResult) {
           try {
-            await env.IMG.prepare(`UPDATE imginfo SET total = total +1 WHERE url = '/file/${name}';`).run();
+            await env.IMG.prepare('UPDATE imginfo SET total = total + 1 WHERE url = ?').bind(`/file/${name}`).run();
           } catch (e) {
             console.error(e);
           }
@@ -732,9 +731,9 @@ export async function POST(request, { params }) {
       if (action === 'list') {
         let { page, query } = await request.json();
         if (query) {
-          const ps = env.IMG.prepare(`SELECT * FROM imginfo WHERE url LIKE '%${query}%' LIMIT 10 OFFSET ${page} * 10`);
+          const ps = env.IMG.prepare('SELECT * FROM imginfo WHERE url LIKE ? LIMIT 10 OFFSET ?').bind(`%${query}%`, page * 10);
           const { results } = await ps.all();
-          const total = await env.IMG.prepare(`SELECT COUNT(*) as total FROM imginfo WHERE url LIKE '%${query}%'`).first();
+          const total = await env.IMG.prepare('SELECT COUNT(*) as total FROM imginfo WHERE url LIKE ?').bind(`%${query}%`).first();
           return Response.json({
             "code": 200,
             "success": true,
@@ -744,7 +743,7 @@ export async function POST(request, { params }) {
             "total": total.total
           }, { headers: corsHeaders });
         } else {
-          const ps = env.IMG.prepare(`SELECT * FROM imginfo ORDER BY id DESC LIMIT 10 OFFSET ${page} * 10`);
+          const ps = env.IMG.prepare('SELECT * FROM imginfo ORDER BY id DESC LIMIT 10 OFFSET ?').bind(page * 10);
           const { results } = await ps.all();
           const total = await env.IMG.prepare(`SELECT COUNT(*) as total FROM imginfo`).first();
           return Response.json({
@@ -762,9 +761,9 @@ export async function POST(request, { params }) {
       if (action === 'log') {
         let { page, query } = await request.json();
         if (query) {
-          const ps = env.IMG.prepare(`SELECT tgimglog.*, imginfo.rating,imginfo.total FROM tgimglog JOIN imginfo ON tgimglog.url = imginfo.url WHERE tgimglog.url LIKE '%${query}%' ORDER BY tgimglog.id DESC LIMIT 10 OFFSET ${page} * 10`);
+          const ps = env.IMG.prepare('SELECT tgimglog.*, imginfo.rating,imginfo.total FROM tgimglog JOIN imginfo ON tgimglog.url = imginfo.url WHERE tgimglog.url LIKE ? ORDER BY tgimglog.id DESC LIMIT 10 OFFSET ?').bind(`%${query}%`, page * 10);
           const { results } = await ps.all();
-          const total = await env.IMG.prepare(`SELECT COUNT(*) as total FROM tgimglog WHERE url LIKE '%${query}%'`).first();
+          const total = await env.IMG.prepare('SELECT COUNT(*) as total FROM tgimglog WHERE url LIKE ?').bind(`%${query}%`).first();
           return Response.json({
             "code": 200,
             "success": true,
@@ -774,7 +773,7 @@ export async function POST(request, { params }) {
             "total": total.total
           }, { headers: corsHeaders });
         } else {
-          const ps = env.IMG.prepare(`SELECT tgimglog.*, imginfo.rating,imginfo.total FROM tgimglog JOIN imginfo ON tgimglog.url = imginfo.url ORDER BY tgimglog.id DESC LIMIT 10 OFFSET ${page} * 10`);
+          const ps = env.IMG.prepare('SELECT tgimglog.*, imginfo.rating,imginfo.total FROM tgimglog JOIN imginfo ON tgimglog.url = imginfo.url ORDER BY tgimglog.id DESC LIMIT 10 OFFSET ?').bind(page * 10);
           const { results } = await ps.all();
           const total = await env.IMG.prepare(`SELECT COUNT(*) as total FROM tgimglog`).first();
           return Response.json({
@@ -1025,7 +1024,7 @@ export async function PUT(request, { params }) {
   if (path === 'admin/block') {
     try {
       let { rating, name } = await request.json();
-      const setData = await env.IMG.prepare(`UPDATE imginfo SET rating = ${rating} WHERE url='${name}'`).run();
+      const setData = await env.IMG.prepare('UPDATE imginfo SET rating = ? WHERE url = ?').bind(rating, name).run();
       return Response.json({
         "code": 200,
         "success": true,
@@ -1092,9 +1091,9 @@ export async function DELETE(request, { params }) {
       }
 
       // 从数据库关联记录中永久清除该数据
-      const setData = await env.IMG.prepare(`DELETE FROM imginfo WHERE url='${name}'`).run();
+      const setData = await env.IMG.prepare('DELETE FROM imginfo WHERE url = ?').bind(name).run();
       try {
-        await env.IMG.prepare(`DELETE FROM tgimglog WHERE url='${name}'`).run();
+        await env.IMG.prepare('DELETE FROM tgimglog WHERE url = ?').bind(name).run();
       } catch (logDeleteErr) {
         console.error('Failed to clean up tgimglog records:', logDeleteErr);
       }

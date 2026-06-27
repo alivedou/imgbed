@@ -1,5 +1,6 @@
 import { getLockoutStatus } from '@/lib/lockout';
 import { NextResponse } from 'next/server';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 export async function GET(request) {
   try {
@@ -9,7 +10,9 @@ export async function GET(request) {
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
     const clientIp = ip ? ip.split(',')[0].trim() : 'unknown';
 
-    const lockout = await getLockoutStatus(username, clientIp);
+    let db = null;
+    try { db = getCloudflareContext()?.env?.IMG; } catch (_) {}
+    const lockout = await getLockoutStatus(username, clientIp, db);
 
     return NextResponse.json({
       success: true,

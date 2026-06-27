@@ -1,7 +1,7 @@
 'use client'
 import { signOut } from "next-auth/react"
 import { Table } from "@/components"
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ToastContainer, toast } from "react-toastify";
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -19,6 +19,7 @@ export default function Admin() {
   const [tgBotToken, setTgBotToken] = useState('');
   const [tgChatId, setTgChatId] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const configRef = useRef({ enableAuthapi, proxyAllImg, tgBotToken, tgChatId });
 
   useEffect(() => {
     fetch('/api/admin/config')
@@ -35,12 +36,9 @@ export default function Admin() {
 
   const handleConfigChange = async (key, value) => {
     try {
-       const payload = {
-         enableAuthapi,
-         proxyAllImg,
-         tgBotToken,
-         tgChatId
-       };
+       // 使用 ref 避免闭包陈旧值问题
+       configRef.current = { enableAuthapi, proxyAllImg, tgBotToken, tgChatId };
+       const payload = { ...configRef.current };
        if (key === 'auth') payload.enableAuthapi = value;
        if (key === 'proxy') payload.proxyAllImg = value;
        if (key === 'tg_bot_token') payload.tgBotToken = value;
