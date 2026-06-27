@@ -147,16 +147,22 @@ const getFileDetail = async (response) => {
 
 // 动态读取系统配置
 export async function getDynamicConfig(env, key, defaultVal = 'false') {
+  const d1Available = !!env.IMG;
   try {
-    if (env.IMG) {
+    if (d1Available) {
       await env.IMG.prepare(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`).run();
       const row = await env.IMG.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
-      if (row && row.value !== undefined) {
+      if (row && row.value !== undefined && row.value !== null) {
         return row.value;
       }
     }
-  } catch (e) {}
-  return (env[key] !== undefined ? String(env[key]) : (process.env[key] !== undefined ? String(process.env[key]) : defaultVal));
+  } catch (e) {
+    console.error('[getDynamicConfig] D1 query failed for key:', key, e);
+  }
+  // D1 可用时优先返回 D1 中的值（即使为空），避免部署后 env 变量覆盖 D1 面板设置
+  if (d1Available) return defaultVal;
+  // D1 不可用时回退到环境变量
+  return (process.env[key] !== undefined ? String(process.env[key]) : defaultVal);
 }
 
 // 动态设置系统配置
