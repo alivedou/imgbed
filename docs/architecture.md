@@ -66,12 +66,8 @@
 * 在复杂的主页面 (`page.js`) 中，当引入新交互时，推荐将具体的表单域、弹窗层或动画包装到 `/src/components/*` 目录下的新文件中，仅以 React Component Props 的形式在主页面中引用，保持主路由页面的逻辑高度清晰。
 
 ### C. Cloudflare Edge Runtime 兼容性守则
-* 本项目绝大部分业务 API 运作在云端 Edge（边缘计算）集群。
-* 每一个新开发的 API 路由，或者现有 `/src/app/api/...` 的子文件，必须在文件头部显式声明：
-  ```javascript
-  export const runtime = 'edge';
-  ```
-* 避免在新模块中引用不兼容 Edge 运行时的 Node.js 原生包。
+* 本项目 v2 已移除所有 `export const runtime = 'edge'` 声明，统一由 `open-next.config.ts` 中的 `converter: "edge"` 处理边缘兼容输出。
+* 新模块无需再显式声明 `runtime = 'edge'`。如未来升级 `@opennextjs/cloudflare` 至支持该声明的版本，此项规则可恢复。
 
 ### D. API 请求一律附带健壮性错误处理 (API Integrity)
 * 对 D1 数据库、R2 存储及 Telegram 等外部服务的请求，必须用完整的 `try-catch` 结构进行捕获。

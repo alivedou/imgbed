@@ -91,34 +91,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: 'jwt',        // 使用 JWT 策略维护会话状态
     maxAge: 24 * 60 * 60,   // 会话的过期时间，单位为秒，这里设置为24小时
   },
-  // 签名秘钥，若环境变量中未指定则使用备用秘钥
-  secret: process.env.AUTH_SECRET || process.env.SECRET || '00Fv/YUm0enwy04IgP4KoNOWLODe2iJ1tvBzr+4kEZ8=',
-  useSecureCookies: process.env.NODE_ENV === 'production',
+  // 生产环境(CF Pages / NODE_ENV=production)必须配置 AUTH_SECRET，开发可用默认值
+  secret: process.env.AUTH_SECRET || process.env.SECRET || (process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production' ? undefined : 'dev-secret'),
+  useSecureCookies: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production',
   cookies: {
     sessionToken: {
       name: `authjs.session-token`,
       options: {
         httpOnly: true,
-        sameSite: 'none',
+        sameSite: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
-        secure: true,
+        secure: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production',
       },
     },
     callbackUrl: {
       name: `authjs.callback-url`,
       options: {
-        sameSite: 'none',
+        sameSite: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
-        secure: true,
+        secure: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production',
       },
     },
     csrfToken: {
       name: `authjs.csrf-token`,
       options: {
         httpOnly: true,
-        sameSite: 'none',
+        sameSite: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
-        secure: true,
+        secure: process.env.CF_PAGES === '1' || process.env.NODE_ENV === 'production',
       },
     },
   },
