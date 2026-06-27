@@ -151,20 +151,37 @@ class LocalD1PreparedStatement {
     if (sql.match(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+system_config/i)) {
       return { success: true };
     }
-    if (sql.match(/SELECT\s+value\s+FROM\s+system_config\s+WHERE\s+key\s*=\s*'([^']+)'/i)) {
-      const matchKey = sql.match(/SELECT\s+value\s+FROM\s+system_config\s+WHERE\s+key\s*=\s*'([^']+)'/i)[1];
-      const found = dbData.system_config.find(item => item.key === matchKey);
-      return found ? [{ value: found.value }] : [];
-    }
-    if (sql.match(/INSERT\s+INTO\s+system_config\s*\(key,\s*value\)\s*VALUES\s*\('([^']+)',\s*'([^']+)'\)\s*ON\s+CONFLICT\(key\)\s+DO\s+UPDATE\s+SET\s+value=excluded\.value/i)) {
-      const match = sql.match(/INSERT\s+INTO\s+system_config\s*\(key,\s*value\)\s*VALUES\s*\('([^']+)',\s*'([^']+)'\)\s*ON\s+CONFLICT\(key\)\s+DO\s+UPDATE\s+SET\s+value=excluded\.value/i);
-      const key = match[1];
-      const value = match[2];
-      const idx = dbData.system_config.findIndex(item => item.key === key);
-      if (idx !== -1) {
-        dbData.system_config[idx].value = value;
+    // SELECT value FROM system_config WHERE key = ?  (parameterized)
+    if (sql.match(/SELECT\s+value\s+FROM\s+system_config\s+WHERE\s+key\s*=\s*[?']/i)) {
+      let matchKey;
+      if (this.bindings.length >= 1) {
+        matchKey = this.bindings[0];
       } else {
-        dbData.system_config.push({ key, value });
+        const m = sql.match(/SELECT\s+value\s+FROM\s+system_config\s+WHERE\s+key\s*=\s*'([^']+)'/i);
+        if (m) matchKey = m[1];
+      }
+      if (matchKey) {
+        const found = dbData.system_config.find(item => item.key === matchKey);
+        return found ? [{ value: found.value }] : [];
+      }
+      return [];
+    }
+    // INSERT INTO system_config ... VALUES (?, ?)  (parameterized)
+    if (sql.match(/INSERT\s+INTO\s+system_config/i)) {
+      let key, value;
+      if (this.bindings.length >= 2) {
+        [key, value] = this.bindings;
+      } else {
+        const m = sql.match(/VALUES\s*\('([^']+)',\s*'([^']+)'\)/i);
+        if (m) { key = m[1]; value = m[2]; }
+      }
+      if (key) {
+        const idx = dbData.system_config.findIndex(item => item.key === key);
+        if (idx !== -1) {
+          dbData.system_config[idx].value = value;
+        } else {
+          dbData.system_config.push({ key, value });
+        }
       }
       return { success: true };
     }
@@ -198,33 +215,38 @@ class LocalD1PreparedStatement {
     // 2. 插入图片元数据与审查评级信息
     if (sql.startsWith('INSERT INTO imginfo')) {
       let url = "", referer = "", ip = "", rating = 0, total = 1, time = "";
-
-      const match = sql.match(/VALUES\s*\(([^)]+)\)/i);
-      if (match) {
-        const rawVals = match[1];
-        const vals = [];
-        let cur = '';
-        let inQuote = false;
-        // 单引号内部空格与逗号防分裂状态机
-        for (let i = 0; i < rawVals.length; i++) {
-          const char = rawVals[i];
-          if (char === "'") {
-            inQuote = !inQuote;
-          } else if (char === ',' && !inQuote) {
-            vals.push(cur.trim().replace(/^'|'$/g, ''));
-            cur = '';
-          } else {
-            cur += char;
+      // 优先使用 bindings（参数化查询）
+      if (this.bindings.length >= 5) {
+        [url, referer, ip, rating, total, time] = this.bindings;
+      } else {
+        // 回退 regex 解析（旧式字符串拼接 SQL）
+        const match = sql.match(/VALUES\s*\(([^)]+)\)/i);
+        if (match) {
+          const rawVals = match[1];
+          const vals = [];
+          let cur = '';
+          let inQuote = false;
+          for (let i = 0; i < rawVals.length; i++) {
+            const char = rawVals[i];
+            if (char === "'") {
+              inQuote = !inQuote;
+            } else if (char === ',' && !inQuote) {
+              vals.push(cur.trim().replace(/^'|'$/g, ''));
+              cur = '';
+            } else {
+              cur += char;
+            }
+          }
+          vals.push(cur.trim().replace(/^'|'$/g, ''));
+          if (vals.length >= 6) {
+            [url, referer, ip, rating, total, time] = vals;
+            rating = Number(rating) || 0;
+            total = Number(total) || 1;
           }
         }
-        vals.push(cur.trim().replace(/^'|'$/g, ''));
-
-        if (vals.length >= 6) {
-          [url, referer, ip, rating, total, time] = vals;
-          rating = Number(rating) || 0;
-          total = Number(total) || 1;
-        }
       }
+      rating = Number(rating) || 0;
+      total = Number(total) || 1;
 
       const nextId = dbData.imginfo.length > 0 ? Math.max(...dbData.imginfo.map(x => x.id || 0)) + 1 : 1;
       const newRecord = {
@@ -247,74 +269,107 @@ class LocalD1PreparedStatement {
       const list = dbData[tableName] || [];
 
       let count = list.length;
-      const likeMatch = sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
-      if (likeMatch) {
-        const query = likeMatch[1];
+      // LIKE filter from bindings (parameterized) or regex (string-interpolated)
+      let query = null;
+      if (this.bindings.length >= 1 && typeof this.bindings[0] === 'string' && this.bindings[0].includes('%')) {
+        query = this.bindings[0].replace(/%/g, '');
+      }
+      if (!query) {
+        const likeMatch = sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
+        if (likeMatch) query = likeMatch[1];
+      }
+      if (query) {
         count = list.filter(item => (item.url || '').toLowerCase().includes(query.toLowerCase())).length;
       }
       return [{ total: count }];
     }
 
     // 4. 查询单张图片的成人审查等评级值
-    if (sql.match(/SELECT\s+rating\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
-      const urlMatch = sql.match(/SELECT\s+rating\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i);
-      const url = urlMatch[1];
-      const found = dbData.imginfo.find(item => item.url === url);
-      return found ? [{ rating: found.rating }] : [];
+    if (sql.match(/SELECT\s+rating\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*[?']/i)) {
+      let url;
+      if (this.bindings.length >= 1) {
+        url = this.bindings[0];
+      } else {
+        const m = sql.match(/SELECT\s+rating\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i);
+        if (m) url = m[1];
+      }
+      if (url) {
+        const found = dbData.imginfo.find(item => item.url === url);
+        return found ? [{ rating: found.rating }] : [];
+      }
+      return [];
     }
 
     // 5. 更新图片的评级等级（黑名单 3，白名单等）
-    if (sql.match(/UPDATE\s+imginfo\s+SET\s+rating\s*=\s*(-?\d+)\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
-      const updateMatch = sql.match(/UPDATE\s+imginfo\s+SET\s+rating\s*=\s*(-?\d+)\s+WHERE\s+url\s*=\s*'([^']+)'/i);
-      const rating = Number(updateMatch[1]);
-      const url = updateMatch[2];
+    if (sql.match(/UPDATE\s+imginfo\s+SET\s+rating\s*=\s*[?\-\d]/i)) {
+      let rating, url;
+      if (this.bindings.length >= 2) {
+        [rating, url] = this.bindings;
+      } else {
+        const m = sql.match(/UPDATE\s+imginfo\s+SET\s+rating\s*=\s*(-?\d+)\s+WHERE\s+url\s*=\s*'([^']+)'/i);
+        if (m) { rating = Number(m[1]); url = m[2]; }
+      }
+      rating = Number(rating) || 0;
       let updated = false;
-      dbData.imginfo.forEach(item => {
-        if (item.url === url) {
-          item.rating = rating;
-          updated = true;
-        }
-      });
+      if (url) {
+        dbData.imginfo.forEach(item => {
+          if (item.url === url) { item.rating = rating; updated = true; }
+        });
+      }
       return { success: true, updated };
     }
 
     // 6. 累加访问量累计器
-    if (sql.match(/UPDATE\s+imginfo\s+SET\s+total\s*=\s*total\s*\+\s*1\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
-      const updateMatch = sql.match(/UPDATE\s+imginfo\s+SET\s+total\s*=\s*total\s*\+\s*1\s+WHERE\s+url\s*=\s*'([^']+)'/i);
-      const url = updateMatch[1];
+    if (sql.match(/UPDATE\s+imginfo\s+SET\s+total\s*=\s*total\s*\+\s*1\s+WHERE\s+url\s*=\s*[?']/i)) {
+      let url;
+      if (this.bindings.length >= 1) {
+        url = this.bindings[0];
+      } else {
+        const m = sql.match(/UPDATE\s+imginfo\s+SET\s+total\s*=\s*total\s*\+\s*1\s+WHERE\s+url\s*=\s*'([^']+)'/i);
+        if (m) url = m[1];
+      }
       let updated = false;
-
-      // 提取纯粹的文件后缀名称以使关联匹配更为鲁棒
-      const getBaseName = (p) => {
-        if (!p) return "";
-        const parts = p.split('/');
-        return parts[parts.length - 1];
-      };
-      const baseNameTarget = getBaseName(url);
-
-      dbData.imginfo.forEach(item => {
-        if (item.url === url || getBaseName(item.url) === baseNameTarget) {
-          item.total = (item.total || 0) + 1;
-          updated = true;
-        }
-      });
+      if (url) {
+        const getBaseName = (p) => {
+          if (!p) return "";
+          const parts = p.split('/');
+          return parts[parts.length - 1];
+        };
+        const baseNameTarget = getBaseName(url);
+        dbData.imginfo.forEach(item => {
+          if (item.url === url || getBaseName(item.url) === baseNameTarget) {
+            item.total = (item.total || 0) + 1;
+            updated = true;
+          }
+        });
+      }
       return { success: true, updated };
     }
 
     // 7. 删除单条图片关联信息
-    if (sql.match(/DELETE\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
-      const deleteMatch = sql.match(/DELETE\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i);
-      const url = deleteMatch[1];
+    if (sql.match(/DELETE\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*[?']/i)) {
+      let url;
+      if (this.bindings.length >= 1) {
+        url = this.bindings[0];
+      } else {
+        const m = sql.match(/DELETE\s+FROM\s+imginfo\s+WHERE\s+url\s*=\s*'([^']+)'/i);
+        if (m) url = m[1];
+      }
       const initialLen = dbData.imginfo.length;
-      dbData.imginfo = dbData.imginfo.filter(item => item.url !== url);
+      if (url) dbData.imginfo = dbData.imginfo.filter(item => item.url !== url);
       return { success: true, deleted: initialLen - dbData.imginfo.length };
     }
 
-    if (sql.match(/DELETE\s+FROM\s+tgimglog\s+WHERE\s+url\s*=\s*'([^']+)'/i)) {
-      const deleteMatch = sql.match(/DELETE\s+FROM\s+tgimglog\s+WHERE\s+url\s*=\s*'([^']+)'/i);
-      const url = deleteMatch[1];
+    if (sql.match(/DELETE\s+FROM\s+tgimglog\s+WHERE\s+url\s*=\s*[?']/i)) {
+      let url;
+      if (this.bindings.length >= 1) {
+        url = this.bindings[0];
+      } else {
+        const m = sql.match(/DELETE\s+FROM\s+tgimglog\s+WHERE\s+url\s*=\s*'([^']+)'/i);
+        if (m) url = m[1];
+      }
       const initialLen = dbData.tgimglog.length;
-      dbData.tgimglog = dbData.tgimglog.filter(item => item.url !== url);
+      if (url) dbData.tgimglog = dbData.tgimglog.filter(item => item.url !== url);
       return { success: true, deleted: initialLen - dbData.tgimglog.length };
     }
 
@@ -324,33 +379,37 @@ class LocalD1PreparedStatement {
       dbData.tgimglog.forEach(log => {
         const info = dbData.imginfo.find(i => i.url === log.url);
         if (info) {
-          list.push({
-            id: log.id,
-            url: log.url,
-            referer: log.referer,
-            ip: log.ip,
-            time: log.time,
-            rating: info.rating,
-            total: info.total
-          });
+          list.push({ id: log.id, url: log.url, referer: log.referer, ip: log.ip, time: log.time, rating: info.rating, total: info.total });
         }
       });
 
-      const likeMatch = sql.match(/tgimglog\.url\s+LIKE\s+'%([^%']+)%'/i) || sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
-      if (likeMatch) {
-        const query = likeMatch[1].toLowerCase();
-        list = list.filter(item => (item.url || '').toLowerCase().includes(query));
+      // LIKE filter from bindings (parameterized) or regex (string-interpolated)
+      let query = null;
+      if (this.bindings.length >= 1 && typeof this.bindings[0] === 'string' && this.bindings[0].includes('%')) {
+        query = this.bindings[0].replace(/%/g, '');
+      }
+      if (!query) {
+        const likeMatch = sql.match(/tgimglog\.url\s+LIKE\s+'%([^%']+)%'/i) || sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
+        if (likeMatch) query = likeMatch[1].toLowerCase();
+      }
+      if (query) {
+        list = list.filter(item => (item.url || '').toLowerCase().includes(query.toLowerCase()));
       }
 
       list.sort((a, b) => b.id - a.id);
 
+      // OFFSET from bindings (parameterized) or regex (string-interpolated)
       let offset = 0;
-      const exprMatch = sql.match(/OFFSET\s+(\d+)\s*\*\s*(\d+)/i);
-      if (exprMatch) {
-        offset = Number(exprMatch[1]) * Number(exprMatch[2]);
+      if (this.bindings.length >= 2 && typeof this.bindings[1] === 'number') {
+        offset = this.bindings[1];
       } else {
-        const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
-        if (offsetMatch) offset = Number(offsetMatch[1]);
+        const exprMatch = sql.match(/OFFSET\s+(\d+)\s*\*\s*(\d+)/i);
+        if (exprMatch) {
+          offset = Number(exprMatch[1]) * Number(exprMatch[2]);
+        } else {
+          const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
+          if (offsetMatch) offset = Number(offsetMatch[1]);
+        }
       }
       return list.slice(offset, offset + 10);
     }
@@ -359,29 +418,50 @@ class LocalD1PreparedStatement {
     if (sql.startsWith('SELECT * FROM imginfo')) {
       let list = [...dbData.imginfo];
 
-      const exactMatch = sql.match(/WHERE\s+url\s*=\s*'([^']+)'/i);
-      if (exactMatch) {
-        const queryUrl = exactMatch[1];
-        list = list.filter(item => item.url === queryUrl);
+      // WHERE url = ? (exact match via bindings or regex)
+      let exactUrl = null;
+      if (this.bindings.length >= 1 && typeof this.bindings[0] === 'string' && !this.bindings[0].includes('%')) {
+        // bindings[0] is an exact URL (no LIKE wildcards)
+        exactUrl = this.bindings[0];
       }
-
-      const likeMatch = sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
-      if (likeMatch) {
-        const query = likeMatch[1].toLowerCase();
-        list = list.filter(item => (item.url || '').toLowerCase().includes(query));
+      if (!exactUrl) {
+        const exactMatch = sql.match(/WHERE\s+url\s*=\s*'([^']+)'/i);
+        if (exactMatch) exactUrl = exactMatch[1];
+      }
+      if (exactUrl) {
+        list = list.filter(item => item.url === exactUrl);
+      } else {
+        // LIKE filter from bindings (wildcards) or regex
+        let likeQuery = null;
+        if (this.bindings.length >= 1 && typeof this.bindings[0] === 'string' && this.bindings[0].includes('%')) {
+          likeQuery = this.bindings[0].replace(/%/g, '');
+        }
+        if (!likeQuery) {
+          const likeMatch = sql.match(/url\s+LIKE\s+'%([^%']+)%'/i);
+          if (likeMatch) likeQuery = likeMatch[1].toLowerCase();
+        }
+        if (likeQuery) {
+          list = list.filter(item => (item.url || '').toLowerCase().includes(likeQuery.toLowerCase()));
+        }
       }
 
       if (sql.match(/ORDER\s+BY\s+id\s+DESC/i)) {
         list.sort((a, b) => b.id - a.id);
       }
 
+      // OFFSET from bindings or regex
       let offset = 0;
-      const exprMatch = sql.match(/OFFSET\s+(\d+)\s*\*\s*(\d+)/i);
-      if (exprMatch) {
-        offset = Number(exprMatch[1]) * Number(exprMatch[2]);
+      const bindingOffsetIdx = exactUrl ? 1 : 0; // if first binding is url, offset is second
+      if (this.bindings.length > bindingOffsetIdx && typeof this.bindings[bindingOffsetIdx] === 'number') {
+        offset = this.bindings[bindingOffsetIdx];
       } else {
-        const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
-        if (offsetMatch) offset = Number(offsetMatch[1]);
+        const exprMatch = sql.match(/OFFSET\s+(\d+)\s*\*\s*(\d+)/i);
+        if (exprMatch) {
+          offset = Number(exprMatch[1]) * Number(exprMatch[2]);
+        } else {
+          const offsetMatch = sql.match(/OFFSET\s+(\d+)/i);
+          if (offsetMatch) offset = Number(offsetMatch[1]);
+        }
       }
       return list.slice(offset, offset + 10);
     }
@@ -643,25 +723,17 @@ export function getSafeRequestContext() {
     try {
       const context = getCloudflareContext();
       if (context && context.env) {
-        const activeEnv = { ...context.env };
-        if (!activeEnv.IMG) {
-          try {
-            activeEnv.IMG = new LocalD1Database();
-          } catch (_) {}
-        }
-        if (!activeEnv.IMGRS) {
-          try {
-            activeEnv.IMGRS = new LocalR2Bucket();
-          } catch (_) {}
-        }
-        const envProxy = new Proxy(activeEnv, {
+        // 直接 Proxy 原始 context.env，避免 { ...env } 展开丢失 D1/R2 不可枚举绑定
+        const envProxy = new Proxy(context.env, {
           get(target, prop) {
             if (prop in target) {
               return target[prop];
             }
+            // 回退到 process.env（环境变量）
             return process.env[prop];
           }
         });
+        console.log('[CF Prod] D1 binding:', typeof envProxy.IMG, '| R2 binding:', typeof envProxy.IMGRS);
         return {
           ...context,
           env: envProxy
