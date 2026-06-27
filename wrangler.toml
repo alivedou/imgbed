@@ -6,6 +6,7 @@ pages_build_output_dir = ".open-next"
 [[d1_databases]]
 binding = "IMG"
 database_name = "imgbed"
+database_id = "1ceb203d-c87b-4047-8f6e-6c181bab5686"
 
 [[r2_buckets]]
 binding = "IMGRS"
