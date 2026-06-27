@@ -52,113 +52,159 @@
 
 ---
 
-## ☁️ Cloudflare Pages 极速傻瓜式部署与数据库初始化教程
+## ☁️ Cloudflare Pages + D1 + R2 部署教程
 
-跟随以下步骤，你可以在 5 分钟内将本项目完整、免费地部署到 Cloudflare Pages，并完成 D1 数据库、Telegram 机器人接口及管理员账户的初始化。
+按照以下步骤将项目完整部署到 Cloudflare Pages，包含 D1 数据库、R2 存储及管理员账户初始化。
 
----
-
-### 第一步：前期准备工作
-在开始部署前，请确保你已经准备好以下信息：
-1. **Cloudflare 账号**：拥有一个免费的 Cloudflare 账户。
-2. **GitHub 仓库**：将本项目代码克隆（Fork）或上传到你自己的 GitHub 私有/公开仓库。
-3. **Telegram 机器人（可选但推荐）**：
-   - 在 Telegram 中关注 [@BotFather](https://t.me/BotFather)，发送 `/newbot` 创建一个机器人，获取 **`TG_BOT_TOKEN`**。
-   - 关注 [@userinfobot](https://t.me/userinfobot) 获取你的 Telegram User ID，或创建一个频道/群组并获取其 **`Chat ID`**，以便后续配置接收通知或作存储通道。
+> **项目已内置 `wrangler.toml`、`_routes.json`、`open-next.config.ts` 等配置文件，无需手动创建。**
 
 ---
 
-### 第二步：创建并初始化 Cloudflare D1 数据库
-由于 D1 是 Serverless SQL 数据库，需要先在云端创建它并运行项目自带的 `tgimglog.sql` 脚本来生成表结构：
+### 前提准备
 
-#### 1. 创建数据库：
-- 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)。
-- 点击左侧导航栏的 **"Workers & Pages" (Workers 和 Pages) -> "D1"**。
-- 点击 **"Create database" (创建数据库)** -> 选择 **"Create empty database" (创建空白数据库)**。
-- 数据库名称填入：**`img`**，然后点击 **"Create" (创建)** 按钮。
-
-#### 2. 初始化表结构（导入 SQL 脚本）：
-- **方法 A：在 Cloudflare 网页后台直接导入（最方便、无需命令行）**
-  1. 点击刚刚创建的 `img` 数据库，进入它的管理界面。
-  2. 切换到 **"Console" (控制台)** 选项卡。
-  3. 用文本编辑器打开本项目根目录下的 **`tgimglog.sql`** 文件，**复制里面的全部内容**。
-  4. 将复制的内容粘贴进 D1 控制台的输入框中，点击 **"Execute" (执行)**。
-  5. 看到执行成功提示即代表 `imginfo` 和 `tgimglog` 两个数据表已成功建好！
-- **方法 B：通过 Wrangler 命令行导入**
-  在本地终端运行：
-  ```bash
-  # 登录你的 Cloudflare 账号
-  npx wrangler login
-  # 导入本地 SQL 脚本到远程 D1 数据库
-  npx wrangler d1 execute img --remote --file=./tgimglog.sql
-  ```
+1. **Cloudflare 账号**：注册免费 [Cloudflare](https://dash.cloudflare.com/) 账户
+2. **GitHub 仓库**：将本项目 Fork 或上传到你的 GitHub 仓库
+3. **Telegram 机器人（可选）**：
+   - 在 Telegram 中关注 [@BotFather](https://t.me/BotFather)，发送 `/newbot` 创建机器人，获取 **`TG_BOT_TOKEN`**
+   - 创建一个频道/群组，获取 **`Chat ID`**（频道 ID 前缀带 `-100`）
 
 ---
 
-### 第三步：在 Cloudflare Pages 部署项目
-1. 登录 Cloudflare 控制台，点击左侧导航栏的 **"Workers & Pages" -> "Overview" (概述)**。
-2. 点击 **"Create" (创建) -> "Pages" -> "Connect to Git" (连接到 Git)**。
-3. 选择你存放本项目代码的 **GitHub 仓库**，点击 **"Begin setup" (开始设置)**。
-4. 在 **Build settings (构建设置)** 页面中进行如下配置：
-   - **Project name (项目名称)**：任意填写（例如 `my-imgbed`）。
-   - **Production branch (生产分支)**：选择你的主分支（通常为 `main` 或 `master`）。
-   - **Framework preset (框架预设)**：选择 **`None`**（不使用预设，避免 Cloudflare 自动猜测错误），或选择 **`Next.js`**。
-   - **Build command (构建命令)**：填入 **`npm run cf-build`**
-   - **Build output directory (构建输出目录)**：填入 **`.open-next`**。
-5. 展开下方 **"Environment variables (advanced)" (环境变量 - 高级)** 栏目，在此处一次性添加项目所需的配置变量（**极其重要，防止编译失败**）：
-   - **`NODE_VERSION`**：**无需配置**（项目已配置 `.node-version`、`.nvmrc` 和 `package.json`，Cloudflare Pages 将自动采用 Node.js 22 稳定版编译）。
-   - **`ADMIN_PASS`**：设置你的管理员后台登录密码（用于 `/login`；管理员用户名固定为 `admin`）。
-   - **`NEXTAUTH_SECRET`**：一串随机长字符串，用于登录 Session 加密（可随意输入 32 位以上字母数字组合）。
-   - **`TG_BOT_TOKEN`**（可选）：你的 Telegram 机器人 Token。
-6. 点击 **"Save and Deploy" (保存并部署)**。由于此时还没进行 D1 绑定，首次构建可能会提示警告或部署完成后访问会报 500 错误，这很正常。请继续进行第四步。
+### 第一步：创建 Cloudflare D1 数据库 & R2 存储桶
+
+#### 1.1 创建 D1 数据库
+1. 登录 Cloudflare 控制台 → **Workers & Pages** → **D1**
+2. 点击 **Create database** → 选择 **Create empty database**
+3. 名称填入 **`imgbed`**，点击 **Create**
+4. 记下右侧面板的 **Database ID**（UUID），后续需填入 `wrangler.toml`
+
+#### 1.2 创建 R2 存储桶（可选，用于本地文件存储）
+1. Cloudflare 控制台 → **R2**
+2. 点击 **Create bucket**
+3. 名称填入 **`imgbed`**，点击 **Create bucket**
 
 ---
 
-### 第四步：绑定 D1 数据库与配置环境
+### 第二步：修改 `wrangler.toml` 配置文件
 
-#### 1. 绑定 D1 数据库：
-1. 在 Pages 项目管理页面中，切换到 **"Settings" (设置)** 选项卡。
-2. 点击左侧的 **"Functions" (函数)** 菜单。
-3. 往下滚动，找到 **"D1 database bindings" (D1 数据库绑定)**。
-4. 在 **Production (生产环境)** 和 **Preview (预览环境)** 中，分别点击 **"Add binding" (添加绑定)**：
-   - **Variable name (变量名称/绑定名称)**：**必须严格填写大写 `IMG`**。
-   - **D1 database (选择数据库)**：选择你在第二步中创建的 D1 数据库（如 `img`）。
-5. 点击 **"Save" (保存)**。
+打开项目根目录的 `wrangler.toml`，将占位的 `database_id` 替换为你的 D1 UUID：
 
-#### 2. 配置兼容的 Node.js 运行环境：
-1. 仍在 **"Settings" (设置)** -> **"Functions" (函数)** 中。
-2. 往下滚动找到 **"Compatibility flags" (兼容性标志)**。
-3. 在 Production 和 Preview 栏目中，分别添加以下兼容标志：
-   - **`nodejs_compat`** （在输入框中打勾或添加该标志，以允许 Next.js 在 edge 侧安全调用 node API）。
-4. 点击 **"Save" (保存)**。
+```toml
+name = "imgbed"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".open-next"
 
----
+[[d1_databases]]
+binding = "IMG"
+database_name = "imgbed"
+database_id = "替换为你的 D1 UUID"    # ← 改这里
 
-### 第五步：重新部署上线 (Redeploy)
-由于刚刚修改了绑定 and 配置，需要让它们生效：
-1. 切换到项目的 **"Deployments" (部署)** 选项卡。
-2. 找到最近的一次构建记录，点击右侧的三个小点，选择 **"Retry deployment" (重新尝试部署)**，或者向你的 GitHub 仓库推送一次提交（git commit）来自动触发新一轮部署。
-3. 构建完成后，点击 Cloudflare Pages 给你分配的专属域名（如 `https://my-imgbed.pages.dev`），即可看到图床主页！
+[[r2_buckets]]
+binding = "IMGRS"
+bucket_name = "imgbed"                # ← 如果 R2 名不同则改这里
+```
+
+> `wrangler.toml` 中的 `database_id` 不是密钥，仅用于 Cloudflare 内部关联绑定。Dashboard 中的 D1/R2 绑定按钮会灰掉，由该文件统一管理。
 
 ---
 
-### 🎉 部署成功与常见故障排查
-* **构建时报错 `Error: Output directory ".vercel/output" not found`？**
-  1. **最主要原因：没有在环境中声明现代 Node.js 版本**。Cloudflare Pages 默认构建环境的 Node 版本较低（如 Node 12/16），无法编译 Next.js 14。虽然我们已经在项目中配置了 `.node-version`、`.nvmrc` 和 `package.json` 中的 `engines` 字段（均指向 **Node 22**），部分旧的部署流如未自动读取，建议在项目的 **Settings (设置) -> Environment variables (环境变量)** 中手动添加 `NODE_VERSION` 值为 `22` 或 `24`，然后重新触发部署。
-  2. 确认 **Build command** 确实是 `npx @opennextjs/cloudflare build`，且 **Build output directory** 是 `.open-next`。
-* **部署日志里有大量的 `npm warn deprecated ...` 警告？**
-  * **风险等级**：**无风险 / 极其安全**。
-  * **原因与影响**：这些警告（例如 `sourcemap-codec`, `inflight` 等提示弃用）是 npm 包管理工具的标准提示，因为三方依赖项或 ESLint 的深层子依赖使用了较旧的包。它们是**非阻塞的**，不会对编译、部署或线上运行产生任何负面影响，直接忽略即可。
-* **构建时报错 `npm error code EUSAGE ... npm ci can only install packages when your package.json and package-lock.json are in sync`？**
-  * **原因**：这是因为我们在 AI Studio 中升级了 `package.json` 中的多项高版本依赖。在 AI Studio 环境中 `package-lock.json` 已经由包管理工具自动更新同步好了，但当您拉取代码到本地或推送至 GitHub 时，**可能只推送了 `package.json` 而漏掉了 `package-lock.json`**，导致 Cloudflare Pages 运行 `npm ci` 校验版本不一致而报错。
-  * **解决方案**：
-    1. **最推荐的做法**：确保您在同步或导出代码到您的 GitHub 仓库时，**将 `package.json` 和 `package-lock.json` 两个文件一并提交（commit）并推送（push）**。
-    2. **备用临时方案**：在 Cloudflare Pages 的项目后台 **Settings (设置) -> Environment variables (环境变量)** 中，添加环境变量 **`NPM_FLAGS`**，其值设为 **`--legacy-peer-deps`**，或者设置环境变量 **`NPM_CONFIG_LEGACY_PEER_DEPS=true`**，可以跳过部分过于严苛的对等依赖校验。
-* **访问后台 `/admin` 或 `/list` 提示密码错误？**
-  确保你在 Pages 的环境变量中正确配置了 `ADMIN_PASS`，并且修改后必须重新部署（Redeploy）一次应用使环境变量载入。
-* **上传媒体文件失败，一直显示 Loading 或报错？**
-  1. 请检查 D1 绑定名称是否为大写 **`IMG`**（不可填错）。
-  2. 请检查第一步中 D1 数据库中的表是否成功通过 `tgimglog.sql` 导入成功（可以去 D1 控制台的 "Tables" 选项卡看看有没有 `imginfo` 这个表）。
-  3. 检查兼容性标志中是否添加了 **`nodejs_compat`**。
+### 第三步：Cloudflare Pages 部署
+
+1. Cloudflare 控制台 → **Workers & Pages** → **Overview** → **Create** → **Pages** → **Connect to Git**
+2. 选择你的 GitHub 仓库，点击 **Begin setup**
+3. 构建设置：
+
+| 配置项 | 值 |
+|:---|:---|
+| **Project name** | 任意（如 `imgbed`） |
+| **Production branch** | `v2`（或你使用的主分支） |
+| **Framework preset** | `None` |
+| **Build command** | `npm run cf-build` |
+| **Build output directory** | `.open-next` |
+
+4. 展开 **Environment variables (advanced)**，添加以下变量：
+
+| 变量名 | 必填 | 说明 |
+|:---|:---|:---|
+| `AUTH_SECRET` | ✅ 必填 | 32 位以上随机字符串，用于加密会话 Token |
+| `ADMIN_PASS` | ✅ 必填 | 管理员密码（用户名固定 `admin`） |
+| `BASIC_PASS` | 建议 | 普通用户密码（用户名固定 `user`），留空默认为 `user` |
+| `TG_BOT_TOKEN` | 可选 | Telegram 机器人 Token |
+| `TG_CHAT_ID` | 可选 | Telegram 频道/群组 Chat ID |
+
+5. 点击 **Save and Deploy**
+
+> 首次部署会 404 或 500，属于正常现象——D1 表尚未创建。
+
+---
+
+### 第四步：初始化 D1 数据库表
+
+部署完成后，进入 D1 控制台 Console 执行表结构迁移：
+
+1. Cloudflare 控制台 → **Workers & Pages** → **D1** → 点击 `imgbed` 数据库
+2. 切换到 **Console** 选项卡
+3. 打开项目根目录的 `tgimglog.sql`，**只复制以下 `CREATE TABLE` 语句**（跳过 `DROP TABLE`）：
+
+```sql
+CREATE TABLE IF NOT EXISTS tgimglog (
+    `id` integer PRIMARY KEY NOT NULL,
+    `url` text,
+    `referer` text,
+    `ip` varchar(255),
+    `time` TEXT
+);
+
+CREATE TABLE IF NOT EXISTS imginfo (
+    `id` integer PRIMARY KEY NOT NULL,
+    `url` text,
+    `referer` text,
+    `ip` varchar(255),
+    `rating` integer,
+    `total` integer,
+    `time` TEXT
+);
+
+CREATE TABLE IF NOT EXISTS system_config (
+    `key` TEXT PRIMARY KEY NOT NULL,
+    `value` TEXT
+);
+
+CREATE TABLE IF NOT EXISTS failed_attempts (
+    `identifier` TEXT PRIMARY KEY NOT NULL,
+    `count` integer DEFAULT 1,
+    `first_failed_at` TEXT,
+    `locked_until` TEXT
+);
+```
+
+4. 粘贴到 Console 输入框，点击 **Execute**
+5. 进入 **Tables** 选项卡确认 4 张表已创建（`tgimglog`、`imginfo`、`system_config`、`failed_attempts`）
+
+---
+
+### 第五步：重新部署
+
+1. 切换到 Pages 项目的 **Deployments** 选项卡
+2. 点击最新构建右侧的 **⋮** → **Retry deployment**
+3. 部署完成后访问 Cloudflare 分配的 `*.pages.dev` 域名，看到图床首页即部署成功
+
+---
+
+### 常见故障排查
+
+| 现象 | 原因 | 解决 |
+|:---|:---|:---|
+| 页面 404 | `_worker.js` / `_routes.json` / 静态文件未正确部署 | 确认构建命令为 `npm run cf-build`（不是 `npx @opennextjs/cloudflare`） |
+| 样式乱 / CSS/JS 404 | `_next/static/` 文件路径错位 | 同上一行，确认构建命令包含 `cp -r assets/_next _next` |
+| 上传成功但刷新后消失 | D1 绑定未生效 | 确认 `wrangler.toml` 中 `database_id` 已替换；D1 表已通过 Console 创建 |
+| 删除闪现成功又恢复 | 同上 | 同上 |
+| 缩略图裂开 | R2 绑定未生效 | 确认 `wrangler.toml` 中 `[[r2_buckets]]` 配置正确 |
+| 登录后 cookie 丢失 | 本地 `http` 下 `SameSite=None; Secure` 策略不兼容 | 仅在本地开发出现，生产环境 HTTPS 正常 |
+| `npm error EUSAGE ... lock file not in sync` | `package.json` 更新但 `package-lock.json` 未同步 | 本地运行 `npm install` 后重新 commit 两个文件 |
+| `npm warn deprecated` 警告 | 传递依赖过时 | 非阻塞警告，不影响部署，可忽略 |
+| `Could not resolve "crypto" / "fs"` 等 44 个错误 | `wrangler.toml` 缺少 `nodejs_compat` 标志 | 项目已内置，如手动创建 wrangler.toml 则需自行添加 |
+| Pages 绑定按钮灰色 | `wrangler.toml` 已接管绑定管理 | 正常现象，绑定由 `wrangler.toml` 管理，无需 Dashboard 操作
 
 
