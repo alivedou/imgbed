@@ -528,7 +528,7 @@ export default function Home() {
           <div className="flex flex-col">
             <h1 className="text-zinc-900 text-2xl font-bold tracking-tight">Upload Center</h1>
             <div className="text-sm text-zinc-500">
-              Max size 5 MB • <span className="text-zinc-900 font-medium">{Total}</span> images hosted • Your IP: <span className="text-zinc-900 font-medium">{IP}</span>
+              Max size 20 MB • <span className="text-zinc-900 font-medium">{Total}</span> images hosted • Your IP: <span className="text-zinc-900 font-medium">{IP}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
